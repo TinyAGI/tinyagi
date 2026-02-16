@@ -16,6 +16,11 @@ export interface ChainStep {
     response: string;
 }
 
+export interface ChannelConfig {
+    bot_token?: string;
+    [key: string]: unknown;
+}
+
 export interface Settings {
     workspace?: {
         path?: string;
@@ -23,9 +28,7 @@ export interface Settings {
     };
     channels?: {
         enabled?: string[];
-        discord?: { bot_token?: string };
-        telegram?: { bot_token?: string };
-        whatsapp?: {};
+        [channelId: string]: ChannelConfig | string[] | undefined;
     };
     models?: {
         provider?: string; // 'anthropic' or 'openai'

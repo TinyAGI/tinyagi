@@ -3,6 +3,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SCRIPT_DIR="$PROJECT_ROOT"
 SETTINGS_FILE="$HOME/.tinyclaw/settings.json"
 
 GREEN='\033[0;32m'
@@ -18,39 +19,32 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # --- Channel registry ---
-# To add a new channel, add its ID here and fill in the config arrays below.
-ALL_CHANNELS=(telegram discord whatsapp)
-
-declare -A CHANNEL_DISPLAY=(
-    [telegram]="Telegram"
-    [discord]="Discord"
-    [whatsapp]="WhatsApp"
-)
-declare -A CHANNEL_TOKEN_KEY=(
-    [discord]="discord_bot_token"
-    [telegram]="telegram_bot_token"
-)
-declare -A CHANNEL_TOKEN_PROMPT=(
-    [discord]="Enter your Discord bot token:"
-    [telegram]="Enter your Telegram bot token:"
-)
-declare -A CHANNEL_TOKEN_HELP=(
-    [discord]="(Get one at: https://discord.com/developers/applications)"
-    [telegram]="(Create a bot via @BotFather on Telegram to get a token)"
-)
+source "$PROJECT_ROOT/lib/common.sh"
+if ! load_channel_registry; then
+    echo -e "${RED}Failed to load channel registry${NC}"
+    exit 1
+fi
 
 # Channel selection - simple checklist
-echo "Which messaging channels (Telegram, Discord, WhatsApp) do you want to enable?"
+if [ ${#ALL_CHANNELS[@]} -eq 0 ]; then
+    echo -e "${RED}No channels available in registry${NC}"
+    exit 1
+fi
+
+channel_list=$(IFS=', '; echo "${ALL_CHANNELS[*]}")
+echo "Which messaging channels (${channel_list}) do you want to enable?"
 echo ""
 
 ENABLED_CHANNELS=()
 for ch in "${ALL_CHANNELS[@]}"; do
-    read -rp "  Enable ${CHANNEL_DISPLAY[$ch]}? [y/N]: " choice
+    display="${CHANNEL_DISPLAY[$ch]:-$ch}"
+    read -rp "  Enable ${display}? [y/N]: " choice
     if [[ "$choice" =~ ^[yY] ]]; then
         ENABLED_CHANNELS+=("$ch")
-        echo -e "    ${GREEN}✓ ${CHANNEL_DISPLAY[$ch]} enabled${NC}"
+        echo -e "    ${GREEN}✓ ${display} enabled${NC}"
     fi
 done
+CHANNEL_CONFIG_JSON="${CHANNEL_CONFIG_JSON%,}"
 echo ""
 
 if [ ${#ENABLED_CHANNELS[@]} -eq 0 ]; then
@@ -63,17 +57,22 @@ declare -A TOKENS
 for ch in "${ENABLED_CHANNELS[@]}"; do
     token_key="${CHANNEL_TOKEN_KEY[$ch]:-}"
     if [ -n "$token_key" ]; then
-        echo "${CHANNEL_TOKEN_PROMPT[$ch]}"
-        echo -e "${YELLOW}${CHANNEL_TOKEN_HELP[$ch]}${NC}"
+        prompt="${CHANNEL_TOKEN_PROMPT[$ch]:-Enter token:}"
+        help="${CHANNEL_TOKEN_HELP[$ch]:-}"
+        display="${CHANNEL_DISPLAY[$ch]:-$ch}"
+        echo "${prompt}"
+        if [ -n "$help" ]; then
+            echo -e "${YELLOW}${help}${NC}"
+        fi
         echo ""
         read -rp "Token: " token_value
 
         if [ -z "$token_value" ]; then
-            echo -e "${RED}${CHANNEL_DISPLAY[$ch]} bot token is required${NC}"
+            echo -e "${RED}${display} bot token is required${NC}"
             exit 1
         fi
         TOKENS[$ch]="$token_value"
-        echo -e "${GREEN}✓ ${CHANNEL_DISPLAY[$ch]} token saved${NC}"
+        echo -e "${GREEN}✓ ${display} token saved${NC}"
         echo ""
     fi
 done
@@ -262,10 +261,6 @@ for i in "${!ENABLED_CHANNELS[@]}"; do
 done
 CHANNELS_JSON="${CHANNELS_JSON}]"
 
-# Build channel configs with tokens
-DISCORD_TOKEN="${TOKENS[discord]:-}"
-TELEGRAM_TOKEN="${TOKENS[telegram]:-}"
-
 # Write settings.json with layered structure
 # Use jq to build valid JSON to avoid escaping issues with agent prompts
 if [ "$PROVIDER" = "anthropic" ]; then
@@ -273,6 +268,17 @@ if [ "$PROVIDER" = "anthropic" ]; then
 else
     MODELS_SECTION='"models": { "provider": "openai", "openai": { "model": "'"${MODEL}"'" } }'
 fi
+
+CHANNEL_CONFIG_JSON=""
+for ch in "${ALL_CHANNELS[@]}"; do
+    token_key="${CHANNEL_TOKEN_KEY[$ch]:-}"
+    if [ -n "$token_key" ]; then
+        token_value="${TOKENS[$ch]:-}"
+        CHANNEL_CONFIG_JSON="$CHANNEL_CONFIG_JSON\"${ch}\": { \"${token_key}\": \"${token_value}\" },"
+    else
+        CHANNEL_CONFIG_JSON="$CHANNEL_CONFIG_JSON\"${ch}\": {},"
+    fi
+done
 
 cat > "$SETTINGS_FILE" <<EOF
 {
@@ -282,13 +288,7 @@ cat > "$SETTINGS_FILE" <<EOF
   },
   "channels": {
     "enabled": ${CHANNELS_JSON},
-    "discord": {
-      "bot_token": "${DISCORD_TOKEN}"
-    },
-    "telegram": {
-      "bot_token": "${TELEGRAM_TOKEN}"
-    },
-    "whatsapp": {}
+    ${CHANNEL_CONFIG_JSON}
   },
   ${AGENTS_JSON}
   ${MODELS_SECTION},
