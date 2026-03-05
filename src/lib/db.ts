@@ -804,14 +804,21 @@ export function acknowledgeRequest(requestId: string): boolean {
     const result = d.prepare(`
         UPDATE outstanding_requests 
         SET status = 'acked', acked_at = ?
-        WHERE request_id = ? AND status = 'pending' AND ack_deadline >= ?
-    `).run(now, requestId, now);
+        WHERE request_id = ? AND status = 'pending'
+    `).run(now, requestId);
 
     if (result.changes > 0) {
         log('DEBUG', `Request ${requestId} acknowledged`);
         return true;
     }
-    return false; // Request not found, already acked, or deadline expired
+    // Log if request was already acked or not found, but don't reject due to deadline
+    // The timeout checker handles expired requests
+    const existing = d.prepare(`SELECT status FROM outstanding_requests WHERE request_id = ?`).get(requestId) as { status: string } | undefined;
+    if (existing?.status === 'acked') {
+        log('DEBUG', `Request ${requestId} already acknowledged`);
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -825,14 +832,20 @@ export function respondToRequest(requestId: string, response: string): boolean {
     const result = d.prepare(`
         UPDATE outstanding_requests 
         SET status = 'responded', responded_at = ?, response = ?
-        WHERE request_id = ? AND status IN ('pending', 'acked') AND response_deadline >= ?
-    `).run(now, response, requestId, now);
+        WHERE request_id = ? AND status IN ('pending', 'acked')
+    `).run(now, response, requestId);
 
     if (result.changes > 0) {
         log('DEBUG', `Request ${requestId} responded`);
         return true;
     }
-    return false; // Request not found, wrong status, or deadline expired
+    // Log if request was already responded or not found
+    const existing = d.prepare(`SELECT status FROM outstanding_requests WHERE request_id = ?`).get(requestId) as { status: string } | undefined;
+    if (existing?.status === 'responded') {
+        log('DEBUG', `Request ${requestId} already responded`);
+        return true;
+    }
+    return false;
 }
 
 /**
