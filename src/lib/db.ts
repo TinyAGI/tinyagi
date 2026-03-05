@@ -639,8 +639,14 @@ export function loadPendingAgents(conversationId: string): string[] {
  * - Bug causes agent to not complete properly
  *
  * This marks conversations as 'completed' if they haven't been updated
- * in a long time (e.g., 30 minutes), allowing them to be purged and
+ * in a long time (e.g., 30 minutes), allowing them to be pruned and
  * preventing memory leaks.
+ *
+ * IMPORTANT:
+ * - Does NOT emit team_chain_end event (this is artificial recovery, not natural completion)
+ * - Does NOT update updated_at (keeps original timestamp for timely pruning)
+ * - Visualizer will NOT show these as completed (they're orphaned conversations)
+ * - Use this for crash recovery only - legitimate work may lose responses
  *
  * Returns number of conversations recovered.
  */
@@ -648,9 +654,9 @@ export function recoverStaleConversations(stalethresholdMs = 30 * 60 * 1000): nu
     const cutoff = Date.now() - stalethresholdMs;
     const result = getDb().prepare(`
         UPDATE conversations
-        SET status = 'completed', updated_at = ?
+        SET status = 'completed'
         WHERE status = 'active' AND updated_at < ?
-    `).run(Date.now(), cutoff);
+    `).run(cutoff);
     return result.changes;
 }
 
