@@ -207,6 +207,17 @@ export function initQueueDb(): void {
         CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at);
         CREATE INDEX IF NOT EXISTS idx_conv_responses_conv ON conversation_responses(conversation_id);
     `);
+    // Verify database integrity on startup
+    try {
+        const result = db.prepare('PRAGMA integrity_check').get() as { integrity_check: string };
+        if (result?.integrity_check !== 'ok') {
+            log('ERROR', `Database integrity check failed: ${result?.integrity_check}`);
+        } else {
+            log('DEBUG', 'Database integrity check passed');
+        }
+    } catch (error) {
+        log('WARN', `Database check failed: ${(error as Error).message}`);
+    }
 }
 
 function getDb(): Database.Database {
