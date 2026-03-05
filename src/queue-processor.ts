@@ -54,6 +54,20 @@ import { startHeartbeat, stopHeartbeat } from './lib/heartbeat';
     }
 });
 
+// Constants for validation
+const MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB - Claude API limit
+
+/**
+ * Validate message before sending to agent.
+ * Returns error message if invalid, null if valid.
+ */
+function validateMessage(message: string): string | null {
+    if (message.length > MAX_MESSAGE_SIZE) {
+        return `Message too large: ${message.length} bytes (max ${MAX_MESSAGE_SIZE} bytes)`;
+    }
+    return null;
+}
+
 /**
  * Handle a simple (non-team) response asynchronously.
  * This function is called when invokeAgent completes, without blocking the queue.
@@ -395,6 +409,14 @@ async function processMessage(dbMsg: DbMessage): Promise<void> {
 
         // --- No team context: simple response to user ---
         if (!teamContext) {
+            // Validate message size before invoking agent
+            const validationError = validateMessage(message);
+            if (validationError) {
+                log('ERROR', `Message validation failed: ${validationError}`);
+                failMessage(dbMsg.id, validationError);
+                return;
+            }
+
             // Fire-and-forget: don't await invokeAgent
             invokeAgent(agent, agentId, message, workspacePath, shouldReset, agents, teams)
                 .then(response => {
@@ -457,6 +479,14 @@ async function processMessage(dbMsg: DbMessage): Promise<void> {
             persistConversation(conv);  // Persist immediately
             log('INFO', `Conversation started: ${conv.id} (team: ${teamContext.team.name})`);
             await emitEvent('team_chain_start', { teamId: teamContext.teamId, teamName: teamContext.team.name, agents: teamContext.team.agents, leader: teamContext.team.leader_agent });
+        }
+
+        // Validate message size before invoking agent
+        const validationError = validateMessage(message);
+        if (validationError) {
+            log('ERROR', `Message validation failed: ${validationError}`);
+            failMessage(dbMsg.id, validationError);
+            return;
         }
 
         // Fire-and-forget: don't await invokeAgent
