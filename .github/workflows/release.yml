@@ -26,6 +26,21 @@ jobs:
           node-version: '18'
           cache: 'npm'
 
+      - name: Verify tag matches package version
+        if: github.ref_type == 'tag'
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          EXPECTED_TAG="v${PACKAGE_VERSION}"
+          ACTUAL_TAG="${GITHUB_REF#refs/tags/}"
+
+          if [ "$ACTUAL_TAG" != "$EXPECTED_TAG" ]; then
+            echo "::warning::Version mismatch detected. Bump package.json version before tagging a release."
+            echo "::error::Tag/package version mismatch. expected=${EXPECTED_TAG}, actual=${ACTUAL_TAG}"
+            exit 1
+          fi
+
+          echo "Tag and package.json version match: ${ACTUAL_TAG}"
+
       - name: Get version from tag
         id: get_version
         run: |
