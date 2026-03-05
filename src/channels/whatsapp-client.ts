@@ -10,6 +10,7 @@ import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 import path from 'path';
 import { ensureSenderPaired } from '../lib/pairing';
+import { watchChannel, clearSignal } from '../lib/signals';
 
 const API_PORT = parseInt(process.env.TINYCLAW_API_PORT || '3777', 10);
 const API_BASE = `http://localhost:${API_PORT}`;
@@ -453,8 +454,18 @@ async function checkOutgoingQueue(): Promise<void> {
     }
 }
 
-// Check outgoing queue every second
-setInterval(checkOutgoingQueue, 1000);
+// Watch for signals (push notifications) instead of polling
+const unwatch = watchChannel('whatsapp', () => {
+    checkOutgoingQueue().then(() => {
+        clearSignal('whatsapp');
+    });
+});
+
+// Fallback polling every 10 seconds (in case signals are missed)
+setInterval(checkOutgoingQueue, 10000);
+
+// REMOVED: Old polling every 1 second
+// setInterval(checkOutgoingQueue, 1000);
 
 // Error handlers
 client.on('auth_failure', (msg: string) => {
@@ -488,6 +499,7 @@ process.on('uncaughtException', (error) => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
     log('INFO', 'Shutting down WhatsApp client...');
+    unwatch();  // Stop watching for signals
 
     // Remove ready flag
     const readyFile = path.join(TINYCLAW_HOME, 'channels/whatsapp_ready');
@@ -501,6 +513,7 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
     log('INFO', 'Shutting down WhatsApp client...');
+    unwatch();  // Stop watching for signals
 
     // Remove ready flag
     const readyFile = path.join(TINYCLAW_HOME, 'channels/whatsapp_ready');

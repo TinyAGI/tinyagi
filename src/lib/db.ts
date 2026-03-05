@@ -280,6 +280,8 @@ export function failMessage(rowId: number, error: string): void {
 
 // ── Responses (outgoing queue) ───────────────────────────────────────────────
 
+import { signalChannel } from './signals';
+
 export function enqueueResponse(data: EnqueueResponseData): number {
     const d = getDb();
     const now = Date.now();
@@ -298,6 +300,10 @@ export function enqueueResponse(data: EnqueueResponseData): number {
         data.metadata ? JSON.stringify(data.metadata) : null,
         now,
     );
+    
+    // Signal channel client that response is ready (push notification)
+    signalChannel(data.channel);
+    
     return result.lastInsertRowid as number;
 }
 
