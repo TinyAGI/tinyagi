@@ -1743,16 +1743,16 @@ async function afterModel(ctx: Parameters<NonNullable<Hooks['afterModel']>>[0]):
         }
     }
 
-    const shouldUseLegacyWriteback = config.autosyncFallbackEnabled && (
-        ctx.isInternal
-        || !config.sessionNativeEnabled
+    // Internal messages (agent-to-agent) are system coordination traffic, not user
+    // conversation records — skip OpenViking writeback entirely for them.
+    const shouldUseLegacyWriteback = !ctx.isInternal && config.autosyncFallbackEnabled && (
+        !config.sessionNativeEnabled
         || nativeSessionWriteFailed
         || !openVikingSessionId
     );
 
     if (shouldUseLegacyWriteback) {
         const fallbackReasons: string[] = [];
-        if (ctx.isInternal) fallbackReasons.push('internal_message');
         if (!config.sessionNativeEnabled) fallbackReasons.push('session_native_disabled');
         if (config.sessionNativeEnabled && !openVikingSessionId) fallbackReasons.push('session_id_unavailable');
         if (nativeSessionWriteFailed) fallbackReasons.push('native_session_write_failed');
