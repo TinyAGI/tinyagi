@@ -168,6 +168,7 @@ const OPENVIKING_NATIVE_PREFETCH_DUMP_FILE = path.join(path.dirname(LOG_FILE), '
 const OPENVIKING_SERVICE_LOG_FILE = path.join(path.dirname(LOG_FILE), 'openviking.log');
 const OPENVIKING_PLUGIN_RUNTIME_DIR = path.join(TINYCLAW_HOME, 'runtime', 'openviking');
 const OPENVIKING_MANAGED_PROCESS_FILE = path.join(OPENVIKING_PLUGIN_RUNTIME_DIR, 'managed-process.json');
+const OPENVIKING_PENDING_COMMIT_DIR = path.join(OPENVIKING_PLUGIN_RUNTIME_DIR, 'pending-commits');
 const openVikingSyncChains = new Map<string, Promise<void>>();
 let startupRecoveryScheduled = false;
 
@@ -502,6 +503,49 @@ function clearManagedOpenVikingProcessState(): void {
         }
     } catch {
         // noop
+    }
+}
+
+type PendingCommitRecord = {
+    agentId: string;
+    sessionId: string;
+    reason: string;
+    createdAt: string;
+};
+
+function pendingCommitFilePath(agentId: string, sessionId: string): string {
+    return path.join(OPENVIKING_PENDING_COMMIT_DIR, `${agentId}-${sessionId}.json`);
+}
+
+function writePendingCommit(agentId: string, sessionId: string, reason: string): void {
+    fs.mkdirSync(OPENVIKING_PENDING_COMMIT_DIR, { recursive: true });
+    const record: PendingCommitRecord = { agentId, sessionId, reason, createdAt: new Date().toISOString() };
+    fs.writeFileSync(pendingCommitFilePath(agentId, sessionId), JSON.stringify(record, null, 2) + '\n', 'utf8');
+}
+
+function clearPendingCommit(agentId: string, sessionId: string): void {
+    try {
+        fs.unlinkSync(pendingCommitFilePath(agentId, sessionId));
+    } catch {
+        // noop — file may already be gone
+    }
+}
+
+function readAllPendingCommits(): PendingCommitRecord[] {
+    try {
+        if (!fs.existsSync(OPENVIKING_PENDING_COMMIT_DIR)) return [];
+        return fs.readdirSync(OPENVIKING_PENDING_COMMIT_DIR)
+            .filter((f) => f.endsWith('.json'))
+            .flatMap((f) => {
+                try {
+                    const raw = fs.readFileSync(path.join(OPENVIKING_PENDING_COMMIT_DIR, f), 'utf8');
+                    return [JSON.parse(raw) as PendingCommitRecord];
+                } catch {
+                    return [];
+                }
+            });
+    } catch {
+        return [];
     }
 }
 
@@ -1043,11 +1087,12 @@ function scheduleStartupRecoveryCommit(config: OpenVikingContextConfig, settings
     if (!config.enabled || !config.sessionNativeEnabled || !config.commitOnShutdown) return;
 
     const entries = listOpenVikingSessionEntries();
-    if (entries.length === 0) return;
+    const pendingCommits = readAllPendingCommits();
+    if (entries.length === 0 && pendingCommits.length === 0) return;
 
     startupRecoveryScheduled = true;
     const workspacePath = resolveWorkspacePathFromSettings(settings);
-    log('INFO', `OpenViking startup recovery scheduled: pending_sessions=${entries.length}`);
+    log('INFO', `OpenViking startup recovery scheduled: pending_sessions=${entries.length} pending_commits=${pendingCommits.length}`);
 
     void (async () => {
         const healthy = await waitForOpenVikingHealthy(config.baseUrl, Math.min(config.commitTimeoutMs, 10000));
@@ -1056,6 +1101,8 @@ function scheduleStartupRecoveryCommit(config: OpenVikingContextConfig, settings
         }
 
         let committed = 0;
+
+        // Recover sessions still in the session map (normal crash/shutdown path).
         for (const entry of entries) {
             // eslint-disable-next-line no-await-in-loop
             const didCommit = await commitMappedNativeSessionAndClear(
@@ -1067,7 +1114,28 @@ function scheduleStartupRecoveryCommit(config: OpenVikingContextConfig, settings
             );
             if (didCommit) committed += 1;
         }
-        log('INFO', `OpenViking startup recovery complete: committed=${committed} pending_at_start=${entries.length}`);
+
+        // Recover pending-commit markers left by rotate+crash: session was
+        // already removed from the map but the commit never completed.
+        for (const record of pendingCommits) {
+            // Skip if the session was already covered by the map recovery above.
+            const alreadyCovered = entries.some((e) => e.sessionId === record.sessionId);
+            if (alreadyCovered) {
+                clearPendingCommit(record.agentId, record.sessionId);
+                continue;
+            }
+            try {
+                // eslint-disable-next-line no-await-in-loop
+                await commitNativeOpenVikingSession(config, workspacePath, record.agentId, record.sessionId);
+                clearPendingCommit(record.agentId, record.sessionId);
+                log('INFO', `OpenViking pending-commit recovery success for @${record.agentId}: session_id=${record.sessionId} original_reason=${record.reason}`);
+                committed += 1;
+            } catch (error) {
+                log('WARN', `OpenViking pending-commit recovery failed for @${record.agentId}: session_id=${record.sessionId} error=${(error as Error).message}`);
+            }
+        }
+
+        log('INFO', `OpenViking startup recovery complete: committed=${committed} pending_at_start=${entries.length + pendingCommits.length}`);
         startupRecoveryScheduled = false;
     })();
 }
@@ -1080,14 +1148,20 @@ function scheduleNativeSessionCommitAfterRotation(
     reason: string
 ): void {
     const agentId = sessionKey.agentId;
+    // Write a pending-commit marker before scheduling so a crash between
+    // deleteOpenVikingSessionId and the actual commit can be recovered on
+    // next startup via readAllPendingCommits().
+    writePendingCommit(agentId, sessionId, reason);
     enqueueOpenVikingSync(agentId, async () => {
         try {
             await commitNativeOpenVikingSession(config, workspacePath, agentId, sessionId);
+            clearPendingCommit(agentId, sessionId);
         } catch (error) {
             log(
                 'WARN',
                 `OpenViking async session commit failed for @${agentId}: session_id=${sessionId} reason=${reason} error=${(error as Error).message}`
             );
+            // Leave the marker on disk — startup recovery will retry.
         }
     });
 }

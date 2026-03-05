@@ -21,6 +21,7 @@ function runParent() {
         'idle-timeout',
         'task-switch',
         'shutdown-drain',
+        'pending-commit-recovery',
     ];
 
     for (const scenario of scenarios) {
@@ -275,6 +276,11 @@ async function runChild(scenario) {
         process.env.TINYCLAW_OPENVIKING_SESSION_NATIVE = '1';
         process.env.TINYCLAW_OPENVIKING_SEARCH_NATIVE = '0';
         process.env.TINYCLAW_OPENVIKING_PREFETCH = '0';
+    } else if (scenario === 'pending-commit-recovery') {
+        process.env.TINYCLAW_OPENVIKING_CONTEXT_PLUGIN = '1';
+        process.env.TINYCLAW_OPENVIKING_SESSION_NATIVE = '1';
+        process.env.TINYCLAW_OPENVIKING_SEARCH_NATIVE = '0';
+        process.env.TINYCLAW_OPENVIKING_PREFETCH = '0';
     } else {
         throw new Error(`unknown scenario: ${scenario}`);
     }
@@ -297,6 +303,25 @@ async function runChild(scenario) {
                 path: workspacePath,
             },
         };
+
+    // pending-commit-recovery: simulate a crash after rotate deleted session from map
+    // but before commit completed — write marker file, no session-map entry.
+    if (scenario === 'pending-commit-recovery') {
+        const pendingCommitDir = path.join(tinyclawHome, 'runtime', 'openviking', 'pending-commits');
+        fs.mkdirSync(pendingCommitDir, { recursive: true });
+        fs.writeFileSync(
+            path.join(pendingCommitDir, 'default-sess-crashed.json'),
+            JSON.stringify({
+                agentId: 'default',
+                sessionId: 'sess-crashed',
+                reason: 'idle_timeout:1000ms',
+                createdAt: new Date(Date.now() - 5000).toISOString(),
+            }, null, 2)
+        );
+        // No session-map entry — simulates post-crash state.
+        fs.mkdirSync(sessionMapDir, { recursive: true });
+        fs.writeFileSync(sessionMapFile, JSON.stringify({ version: 1, sessions: {} }, null, 2));
+    }
 
     if ([
         'enabled',
@@ -355,6 +380,19 @@ async function runChild(scenario) {
         shouldReset: false,
         userMessageForSession: 'hello',
     };
+
+    // pending-commit-recovery only needs onStartup — skip the normal message flow.
+    if (scenario === 'pending-commit-recovery') {
+        await plugins.runStartupHooks({ settings });
+        // Wait for async recovery (health check times out at commitTimeoutMs=1500ms).
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const called = fs.existsSync(commandLogFile) ? fs.readFileSync(commandLogFile, 'utf8') : '';
+        assert.match(called, /session-commit sess-crashed/, 'pending-commit recovery should commit the crashed session');
+        const pendingCommitDir = path.join(tinyclawHome, 'runtime', 'openviking', 'pending-commits');
+        const remaining = fs.readdirSync(pendingCommitDir).filter((f) => f.endsWith('.json'));
+        assert.strictEqual(remaining.length, 0, 'pending-commit marker should be removed after successful recovery');
+        return;
+    }
 
     let initialMessage = 'what do you remember about me?';
     if (scenario === 'task-switch') {
