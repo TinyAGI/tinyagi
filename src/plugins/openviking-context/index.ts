@@ -171,9 +171,9 @@ const OPENVIKING_MANAGED_PROCESS_FILE = path.join(OPENVIKING_PLUGIN_RUNTIME_DIR,
 const openVikingSyncChains = new Map<string, Promise<void>>();
 let startupRecoveryScheduled = false;
 
-async function runCommand(command: string, args: string[], cwd?: string, timeoutMs?: number): Promise<string> {
+async function runCommand(command: string, args: string[], cwd?: string, timeoutMs?: number, extraEnv?: Record<string, string>): Promise<string> {
     return new Promise((resolve, reject) => {
-        const env = { ...process.env };
+        const env = { ...process.env, ...extraEnv };
         delete env.CLAUDECODE;
 
         const child = spawn(command, args, {
@@ -461,10 +461,11 @@ function resolveOpenVikingContextConfig(settings: Settings): OpenVikingContextCo
     };
 }
 
-function applyOpenVikingToolEnv(config: OpenVikingContextConfig): void {
-    process.env.OPENVIKING_BASE_URL = config.baseUrl;
-    if (config.project) process.env.OPENVIKING_PROJECT = config.project;
-    if (config.apiKey) process.env.OPENVIKING_API_KEY = config.apiKey;
+function buildOpenVikingToolEnv(config: OpenVikingContextConfig): Record<string, string> {
+    const env: Record<string, string> = { OPENVIKING_BASE_URL: config.baseUrl };
+    if (config.project) env.OPENVIKING_PROJECT = config.project;
+    if (config.apiKey) env.OPENVIKING_API_KEY = config.apiKey;
+    return env;
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -564,7 +565,6 @@ async function waitForOpenVikingHealthy(baseUrl: string, timeoutMs: number): Pro
 
 async function startOpenVikingIfNeeded(config: OpenVikingContextConfig): Promise<void> {
     if (!config.autoStart) return;
-    applyOpenVikingToolEnv(config);
 
     if (await isOpenVikingHealthy(config.baseUrl, 1200)) {
         const managed = readManagedOpenVikingProcessState();
@@ -610,7 +610,7 @@ async function startOpenVikingIfNeeded(config: OpenVikingContextConfig): Promise
         const child = spawn(config.binary, args, {
             detached: true,
             stdio: ['ignore', logFd, logFd],
-            env: { ...process.env },
+            env: { ...process.env, ...buildOpenVikingToolEnv(config) },
         });
         child.unref();
 
@@ -893,6 +893,9 @@ function matchSessionSwitchDirective(
     return { matched: false, strippedMessage: message };
 }
 
+// TODO(perf): each call spawns a new Node.js process. Hot-path calls (session-create,
+// session-message, search) should be migrated to direct HTTP calls against the OpenViking
+// API to eliminate per-turn process startup overhead.
 async function runOpenVikingToolJson(
     config: OpenVikingContextConfig,
     workspacePath: string,
@@ -909,7 +912,8 @@ async function runOpenVikingToolJson(
         'node',
         [toolPath, ...commandArgs],
         path.join(workspacePath, agentId),
-        timeoutMs
+        timeoutMs,
+        buildOpenVikingToolEnv(config)
     );
     const trimmed = output.trim();
     if (!trimmed) return {};
@@ -1390,7 +1394,7 @@ async function invokePrefetchGateLlm(ctx: BeforeModelContext, prompt: string, ti
         if (modelId) {
             args.push('--model', modelId);
         }
-        args.push('--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox', '--json', prompt);
+        args.push('--skip-git-repo-check', '--json', prompt);
         const output = await runCommand('codex', args, workdir, timeoutMs);
         return parseCodexJsonlAgentMessage(output) || output;
     }
@@ -1407,7 +1411,7 @@ async function invokePrefetchGateLlm(ctx: BeforeModelContext, prompt: string, ti
     }
 
     const modelId = resolveClaudeModel(ctx.agent.model);
-    const args = ['--dangerously-skip-permissions'];
+    const args: string[] = [];
     if (modelId) {
         args.push('--model', modelId);
     }
@@ -1564,7 +1568,6 @@ async function beforeModel(ctx: BeforeModelContext): Promise<BeforeModelHookResu
     const beforeModelStartedAt = Date.now();
     const config = resolveOpenVikingContextConfig(ctx.settings);
     if (!config.enabled) return;
-    applyOpenVikingToolEnv(config);
 
     let message = ctx.message;
     let sessionUserMessage = ctx.userMessageForSession;
@@ -1715,7 +1718,6 @@ async function beforeModel(ctx: BeforeModelContext): Promise<BeforeModelHookResu
 async function afterModel(ctx: Parameters<NonNullable<Hooks['afterModel']>>[0]): Promise<void> {
     const config = resolveOpenVikingContextConfig(ctx.settings);
     if (!config.enabled) return;
-    applyOpenVikingToolEnv(config);
 
     const pluginState = asPluginState(ctx.state);
     const openVikingSessionId = pluginState.openVikingSessionId;
@@ -1778,8 +1780,6 @@ async function onStartup(ctx: StartupContext): Promise<void> {
         return;
     }
 
-    applyOpenVikingToolEnv(config);
-
     log(
         'INFO',
         `[plugin:openviking-context] enabled auto_start=${config.autoStart ? 1 : 0} base_url=${config.baseUrl} ` +
@@ -1836,7 +1836,6 @@ function onHealth(ctx: HealthContext): HealthResult {
 
 async function onSessionEnd(ctx: SessionEndContext): Promise<void> {
     const config = resolveOpenVikingContextConfig(ctx.settings);
-    applyOpenVikingToolEnv(config);
     if (
         config.enabled
         && config.sessionNativeEnabled
