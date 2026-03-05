@@ -921,11 +921,13 @@ export function getRequest(requestId: string): OutstandingRequest | null {
 
 /**
  * Get all pending requests for a conversation.
+ * Ordered by creation time (FIFO) so find() gets oldest first.
  */
 export function getPendingRequestsForConversation(conversationId: string): OutstandingRequest[] {
     return getDb().prepare(`
         SELECT * FROM outstanding_requests 
         WHERE conversation_id = ? AND status IN ('pending', 'acked')
+        ORDER BY created_at ASC
     `).all(conversationId) as OutstandingRequest[];
 }
 

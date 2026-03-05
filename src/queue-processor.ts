@@ -165,13 +165,14 @@ async function handleTeamResponse(
             incrementTotalMessages(conv.id);
             removePendingAgent(conv.id, agentId);
 
-            // Check if this response completes an outstanding request
-            // (i.e., this agent was asked to do something and is now responding)
+            // Check if this response completes outstanding requests
+            // (i.e., this agent was asked to do things and is now responding)
+            // Use filter() not find() - agent may have been asked multiple things
             const pendingRequests = getPendingRequestsForConversation(conv.id);
-            const matchingRequest = pendingRequests.find(r => r.to_agent === agentId && r.status === 'acked');
-            if (matchingRequest) {
-                respondToRequest(matchingRequest.request_id, response);
-                log('INFO', `Request ${matchingRequest.request_id} completed by @${agentId}`);
+            const matchingRequests = pendingRequests.filter(r => r.to_agent === agentId && r.status === 'acked');
+            for (const req of matchingRequests) {
+                respondToRequest(req.request_id, response);
+                log('INFO', `Request ${req.request_id} completed by @${agentId}`);
             }
 
             // Check for teammate mentions (agent asking other agents to do things)
