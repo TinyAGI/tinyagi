@@ -120,6 +120,11 @@ async function handleSimpleResponse(
         });
 
         log('INFO', `✓ Response ready [${channel}] ${sender} via agent:${agentId} (${finalResponse.length} chars)`);
+        await emitEvent('chain_step_done', {
+            agentId,
+            responseLength: finalResponse.length,
+            responseText: finalResponse,
+        });
         await emitEvent('response_ready', {
             channel, sender, agentId,
             responseLength: finalResponse.length,
@@ -154,6 +159,12 @@ async function handleTeamResponse(
         await withConversationLock(conv.id, async () => {
             // Persist response to DB first (for restart recovery)
             persistResponse(conv.id, agentId, response);
+
+            await emitEvent('chain_step_done', {
+                agentId,
+                responseLength: response.length,
+                responseText: response,
+            });
 
             // Update in-memory conversation
             conv.responses.push({ agentId, response });
