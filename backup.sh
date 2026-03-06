@@ -22,16 +22,9 @@ fi
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/tinyclaw_${TIMESTAMP}.db"
 
-# Copy main database
-cp "$DB_FILE" "$BACKUP_FILE"
-
-# Copy WAL files if they exist (WAL mode requires these for consistency)
-if [ -f "$DB_FILE-wal" ]; then
-    cp "$DB_FILE-wal" "$BACKUP_FILE-wal"
-fi
-if [ -f "$DB_FILE-shm" ]; then
-    cp "$DB_FILE-shm" "$BACKUP_FILE-shm"
-fi
+# Atomic hot-backup using SQLite's built-in backup API
+# Safe while database is actively being written to (WAL mode)
+sqlite3 "$DB_FILE" ".backup '$BACKUP_FILE'"
 
 # Verify backup is valid (can open it)
 if ! sqlite3 "$BACKUP_FILE" ".tables" >/dev/null 2>&1; then
