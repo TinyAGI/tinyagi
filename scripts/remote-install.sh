@@ -12,8 +12,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-GITHUB_REPO="TinyAGI/tinyclaw"
-DEFAULT_BRANCH="main"
+GITHUB_REPO="dpbmaverick98/tinyclaw"
+DEFAULT_BRANCH="sql-experiment"
 INSTALL_DIR=""
 
 echo ""
@@ -142,7 +142,7 @@ else
     fi
 
     echo "Cloning repository..."
-    git clone --depth 1 "https://github.com/$GITHUB_REPO.git" "$INSTALL_DIR"
+    git clone --depth 1 --branch "$DEFAULT_BRANCH" "https://github.com/$GITHUB_REPO.git" "$INSTALL_DIR"
     echo -e "${GREEN}✓ Repository cloned${NC}"
 fi
 echo ""
