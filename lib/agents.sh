@@ -150,12 +150,61 @@ agent_add() {
     echo "  1) Anthropic (Claude)"
     echo "  2) OpenAI (Codex)"
     echo "  3) OpenCode"
-    read -rp "Choose [1-3, default: 1]: " AGENT_PROVIDER_CHOICE
+    echo "  4) Kimi"
+    echo "  5) MiniMax"
+    read -rp "Choose [1-5, default: 1]: " AGENT_PROVIDER_CHOICE
     case "$AGENT_PROVIDER_CHOICE" in
         2) AGENT_PROVIDER="openai" ;;
         3) AGENT_PROVIDER="opencode" ;;
+        4) AGENT_PROVIDER="kimi" ;;
+        5) AGENT_PROVIDER="minimax" ;;
         *) AGENT_PROVIDER="anthropic" ;;
     esac
+
+    # API Key for kimi/minimax
+    AGENT_API_KEY=""
+    if [ "$AGENT_PROVIDER" = "kimi" ] || [ "$AGENT_PROVIDER" = "minimax" ]; then
+        local PROVIDER_DISPLAY="$AGENT_PROVIDER"
+        [ "$AGENT_PROVIDER" = "kimi" ] && PROVIDER_DISPLAY="Kimi"
+        [ "$AGENT_PROVIDER" = "minimax" ] && PROVIDER_DISPLAY="MiniMax"
+
+        # Check for global key
+        local GLOBAL_KEY=""
+        if [ "$AGENT_PROVIDER" = "kimi" ]; then
+            GLOBAL_KEY=$(jq -r '.models.kimi.apiKey // empty' "$SETTINGS_FILE" 2>/dev/null)
+        else
+            GLOBAL_KEY=$(jq -r '.models.minimax.apiKey // empty' "$SETTINGS_FILE" 2>/dev/null)
+        fi
+
+        if [ -n "$GLOBAL_KEY" ]; then
+            local MASKED_KEY="${GLOBAL_KEY:0:4}...${GLOBAL_KEY: -4}"
+            echo ""
+            echo "Global $PROVIDER_DISPLAY API key found: $MASKED_KEY"
+            read -rp "Use global key? [Y/n]: " USE_GLOBAL
+            if [[ "$USE_GLOBAL" =~ ^[nN] ]]; then
+                read -rp "Enter different API key for this agent: " AGENT_API_KEY
+            fi
+        else
+            echo ""
+            read -rp "Enter $PROVIDER_DISPLAY API key for this agent: " AGENT_API_KEY
+        fi
+
+        if [ -n "$AGENT_API_KEY" ]; then
+            echo "Validating API key..."
+            local VALIDATION_URL=""
+            [ "$AGENT_PROVIDER" = "kimi" ] && VALIDATION_URL="https://api.kimi.com/v1/models"
+            [ "$AGENT_PROVIDER" = "minimax" ] && VALIDATION_URL="https://api.minimax.io/anthropic/v1/models"
+
+            if command -v curl > /dev/null 2>&1; then
+                local HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $AGENT_API_KEY" "$VALIDATION_URL" 2>/dev/null || echo "000")
+                if [ "$HTTP_STATUS" = "200" ]; then
+                    echo -e "${GREEN}✓ API key validated${NC}"
+                else
+                    echo -e "${YELLOW}⚠ Warning: API key validation failed (HTTP $HTTP_STATUS)${NC}"
+                fi
+            fi
+        fi
+    fi
 
     # Model
     echo ""
@@ -202,6 +251,16 @@ agent_add() {
             3) read -rp "Enter model name: " AGENT_MODEL ;;
             *) AGENT_MODEL="gpt-5.3-codex" ;;
         esac
+    elif [ "$AGENT_PROVIDER" = "kimi" ]; then
+        echo "Model:"
+        echo "  1) kimi2.5"
+        read -rp "Choose [1]: " AGENT_MODEL_CHOICE
+        AGENT_MODEL="kimi2.5"
+    elif [ "$AGENT_PROVIDER" = "minimax" ]; then
+        echo "Model:"
+        echo "  1) MiniMax-M2.5"
+        read -rp "Choose [1]: " AGENT_MODEL_CHOICE
+        AGENT_MODEL="MiniMax-M2.5"
     fi
 
     # Working directory - automatically set to agent directory
@@ -212,17 +271,33 @@ agent_add() {
 
     # Build the agent JSON object
     local agent_json
-    agent_json=$(jq -n \
-        --arg name "$AGENT_NAME" \
-        --arg provider "$AGENT_PROVIDER" \
-        --arg model "$AGENT_MODEL" \
-        --arg workdir "$AGENT_WORKDIR" \
-        '{
-            name: $name,
-            provider: $provider,
-            model: $model,
-            working_directory: $workdir
-        }')
+    if [ -n "$AGENT_API_KEY" ]; then
+        agent_json=$(jq -n \
+            --arg name "$AGENT_NAME" \
+            --arg provider "$AGENT_PROVIDER" \
+            --arg model "$AGENT_MODEL" \
+            --arg workdir "$AGENT_WORKDIR" \
+            --arg apiKey "$AGENT_API_KEY" \
+            '{
+                name: $name,
+                provider: $provider,
+                model: $model,
+                working_directory: $workdir,
+                apiKey: $apiKey
+            }')
+    else
+        agent_json=$(jq -n \
+            --arg name "$AGENT_NAME" \
+            --arg provider "$AGENT_PROVIDER" \
+            --arg model "$AGENT_MODEL" \
+            --arg workdir "$AGENT_WORKDIR" \
+            '{
+                name: $name,
+                provider: $provider,
+                model: $model,
+                working_directory: $workdir
+            }')
+    fi
 
     # Ensure agents section exists and add the new agent
     jq --arg id "$AGENT_ID" --argjson agent "$agent_json" \
