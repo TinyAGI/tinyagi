@@ -170,7 +170,7 @@ export function resolveApiKey(agent: AgentConfig, settings: Settings): string {
 export function getProviderBaseUrl(provider: string): string {
     switch (provider) {
         case 'kimi':
-            return 'https://api.kimi.com/coding';
+            return 'https://api.kimi.com/coding/';
         case 'minimax':
             return 'https://api.minimax.io/anthropic';
         default:
