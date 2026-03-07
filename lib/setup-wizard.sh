@@ -142,7 +142,7 @@ if [ "$PROVIDER" = "kimi" ] || [ "$PROVIDER" = "minimax" ]; then
     echo ""
     echo -e "${BLUE}Validating API key...${NC}"
     VALIDATION_URL=""
-    [ "$PROVIDER" = "kimi" ] && VALIDATION_URL="https://api.kimi.com/v1/models"
+    [ "$PROVIDER" = "kimi" ] && VALIDATION_URL="https://api.kimi.com/coding/models"
     [ "$PROVIDER" = "minimax" ] && VALIDATION_URL="https://api.minimax.io/anthropic/v1/models"
 
     if command -v curl > /dev/null 2>&1; then
