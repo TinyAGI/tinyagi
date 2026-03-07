@@ -190,8 +190,9 @@ export async function invokeAgent(
         const modelId = agent.model;
 
         // Build extra env vars for runCommand
-        const extraEnv: Record<string, string> = {
+        const extraEnv: Record<string, string | undefined> = {
             ANTHROPIC_API_KEY: apiKey,
+            ANTHROPIC_AUTH_TOKEN: undefined,  // clear any inherited value
             ANTHROPIC_BASE_URL: baseUrl,
             ANTHROPIC_MODEL: modelId,
             ANTHROPIC_DEFAULT_SONNET_MODEL: modelId,
@@ -201,7 +202,6 @@ export async function invokeAgent(
             API_TIMEOUT_MS: '3000000',
             CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
             CLAUDE_CONFIG_DIR: path.join(agentDir, '.claude'),
-            CC_MIRROR_UNSET_AUTH_TOKEN: '1',
         };
 
         const claudeArgs = ['--dangerously-skip-permissions'];
