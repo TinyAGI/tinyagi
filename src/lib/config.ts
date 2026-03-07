@@ -179,9 +179,3 @@ export function getProviderBaseUrl(provider: string): string {
     }
 }
 
-/**
- * Validate that a provider requires an API key.
- */
-export function providerRequiresApiKey(provider: string): boolean {
-    return provider === 'kimi' || provider === 'minimax';
-}
