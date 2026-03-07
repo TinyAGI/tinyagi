@@ -42,6 +42,7 @@ export interface Settings {
     anthropic?: { model?: string };
     openai?: { model?: string };
     opencode?: { model?: string };
+    gemini?: { model?: string };
   };
   agents?: Record<string, AgentConfig>;
   teams?: Record<string, TeamConfig>;

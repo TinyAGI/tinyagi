@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { AgentConfig, TeamConfig } from './types';
-import { SCRIPT_DIR, resolveClaudeModel, resolveCodexModel, resolveOpenCodeModel } from './config';
+import { SCRIPT_DIR, resolveClaudeModel, resolveCodexModel, resolveGeminiModel, resolveOpenCodeModel } from './config';
 import { log } from './logging';
 import { ensureAgentDirectory, updateAgentTeammates } from './agent';
 
@@ -48,7 +48,7 @@ export async function runCommand(command: string, args: string[], cwd?: string):
 }
 
 /**
- * Invoke a single agent with a message. Contains all Claude/Codex invocation logic.
+ * Invoke a single agent with a message. Contains provider-specific invocation logic.
  * Returns the raw response text.
  */
 export async function invokeAgent(
@@ -156,6 +156,63 @@ export async function invokeAgent(
         }
 
         return response || 'Sorry, I could not generate a response from OpenCode.';
+    } else if (provider === 'gemini') {
+        // Gemini CLI — non-interactive mode via --prompt.
+        // Uses --output-format json to return a single JSON object with a "response" field.
+        // Uses --resume latest for session continuation and retries fresh if resume is unavailable.
+        const modelId = resolveGeminiModel(agent.model);
+        log('INFO', `Using Gemini CLI (agent: ${agentId}, model: ${modelId || 'auto'})`);
+
+        const continueConversation = !shouldReset;
+
+        if (shouldReset) {
+            log('INFO', `🔄 Resetting Gemini conversation for agent: ${agentId}`);
+        }
+
+        const buildGeminiArgs = (withResume: boolean) => {
+            const args = ['--output-format', 'json', '--approval-mode', 'yolo'];
+            if (modelId) {
+                args.push('--model', modelId);
+            }
+            if (withResume) {
+                args.push('--resume', 'latest');
+            }
+            args.push('--prompt', message);
+            return args;
+        };
+
+        const parseGeminiOutput = (output: string): string | null => {
+            const trimmed = output.trim();
+            if (!trimmed) return null;
+            try {
+                const json = JSON.parse(trimmed);
+                if (typeof json.response === 'string' && json.response.trim()) {
+                    return json.response;
+                }
+                if (json?.error?.message) {
+                    return `Gemini CLI error: ${json.error.message}`;
+                }
+            } catch {
+                return trimmed;
+            }
+            return null;
+        };
+
+        let geminiOutput: string;
+        try {
+            geminiOutput = await runCommand('gemini', buildGeminiArgs(continueConversation), workingDir);
+        } catch (err: any) {
+            const errMsg = String(err?.message || '');
+            const resumeUnavailable = /(error resuming session|no .*session|session not found)/i.test(errMsg);
+            if (continueConversation && resumeUnavailable) {
+                log('INFO', `No resumable Gemini session for agent ${agentId}, starting fresh`);
+                geminiOutput = await runCommand('gemini', buildGeminiArgs(false), workingDir);
+            } else {
+                throw err;
+            }
+        }
+
+        return parseGeminiOutput(geminiOutput) || 'Sorry, I could not generate a response from Gemini.';
     } else {
         // Default to Claude (Anthropic)
         log('INFO', `Using Claude provider (agent: ${agentId})`);

@@ -1,6 +1,6 @@
 export interface AgentConfig {
     name: string;
-    provider: string;       // 'anthropic', 'openai', or 'opencode'
+    provider: string;       // 'anthropic', 'openai', 'opencode', or 'gemini'
     model: string;           // e.g. 'sonnet', 'opus', 'gpt-5.3-codex'
     working_directory: string;
     system_prompt?: string;
@@ -43,7 +43,7 @@ export interface Settings {
         whatsapp?: {};
     };
     models?: {
-        provider?: string; // 'anthropic', 'openai', or 'opencode'
+        provider?: string; // 'anthropic', 'openai', 'opencode', or 'gemini'
         anthropic?: {
             model?: string;
         };
@@ -51,6 +51,9 @@ export interface Settings {
             model?: string;
         };
         opencode?: {
+            model?: string;
+        };
+        gemini?: {
             model?: string;
         };
     };
@@ -117,6 +120,18 @@ export const CLAUDE_MODEL_IDS: Record<string, string> = {
 export const CODEX_MODEL_IDS: Record<string, string> = {
     'gpt-5.2': 'gpt-5.2',
     'gpt-5.3-codex': 'gpt-5.3-codex',
+};
+
+// Gemini CLI model IDs. Falls back to the raw model string.
+export const GEMINI_MODEL_IDS: Record<string, string> = {
+    'auto': 'auto',
+    'pro': 'gemini-2.5-pro',
+    'flash': 'gemini-2.5-flash',
+    'flash-lite': 'gemini-2.5-flash-lite',
+    'gemini-2.5-pro': 'gemini-2.5-pro',
+    'gemini-2.5-flash': 'gemini-2.5-flash',
+    'gemini-2.5-flash-lite': 'gemini-2.5-flash-lite',
+    'gemini-3-pro-preview': 'gemini-3-pro-preview',
 };
 
 // OpenCode model IDs in provider/model format (passed via --model / -m flag).

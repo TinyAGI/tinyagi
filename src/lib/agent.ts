@@ -60,6 +60,11 @@ export function ensureAgentDirectory(agentDir: string): void {
         fs.copyFileSync(sourceAgents, path.join(agentDir, '.claude', 'CLAUDE.md'));
     }
 
+    // Copy AGENTS.md as GEMINI.md for Gemini CLI context loading.
+    if (fs.existsSync(sourceAgents)) {
+        fs.copyFileSync(sourceAgents, path.join(agentDir, 'GEMINI.md'));
+    }
+
     // Copy default skills from SCRIPT_DIR into .agents/skills
     const sourceSkills = path.join(SCRIPT_DIR, '.agents', 'skills');
     if (fs.existsSync(sourceSkills)) {
@@ -144,4 +149,21 @@ export function updateAgentTeammates(agentDir: string, agentId: string, agents: 
         claudeContent = claudeContent.trimEnd() + '\n\n' + startMarker + block + endMarker + '\n';
     }
     fs.writeFileSync(claudeMdPath, claudeContent);
+
+    // Also write to GEMINI.md for Gemini CLI.
+    const geminiMdPath = path.join(agentDir, 'GEMINI.md');
+    let geminiContent = '';
+    if (fs.existsSync(geminiMdPath)) {
+        geminiContent = fs.readFileSync(geminiMdPath, 'utf8');
+    } else if (fs.existsSync(agentsMdPath)) {
+        geminiContent = fs.readFileSync(agentsMdPath, 'utf8');
+    }
+    const gStartIdx = geminiContent.indexOf(startMarker);
+    const gEndIdx = geminiContent.indexOf(endMarker);
+    if (gStartIdx !== -1 && gEndIdx !== -1) {
+        geminiContent = geminiContent.substring(0, gStartIdx + startMarker.length) + block + geminiContent.substring(gEndIdx);
+    } else {
+        geminiContent = geminiContent.trimEnd() + '\n\n' + startMarker + block + endMarker + '\n';
+    }
+    fs.writeFileSync(geminiMdPath, geminiContent);
 }

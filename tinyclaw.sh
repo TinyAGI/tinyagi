@@ -96,6 +96,10 @@ case "${1:-}" in
                 CURRENT_PROVIDER=$(jq -r '.models.provider // "anthropic"' "$SETTINGS_FILE" 2>/dev/null)
                 if [ "$CURRENT_PROVIDER" = "openai" ]; then
                     CURRENT_MODEL=$(jq -r '.models.openai.model // empty' "$SETTINGS_FILE" 2>/dev/null)
+                elif [ "$CURRENT_PROVIDER" = "gemini" ]; then
+                    CURRENT_MODEL=$(jq -r '.models.gemini.model // empty' "$SETTINGS_FILE" 2>/dev/null)
+                elif [ "$CURRENT_PROVIDER" = "opencode" ]; then
+                    CURRENT_MODEL=$(jq -r '.models.opencode.model // empty' "$SETTINGS_FILE" 2>/dev/null)
                 else
                     CURRENT_MODEL=$(jq -r '.models.anthropic.model // empty' "$SETTINGS_FILE" 2>/dev/null)
                 fi
@@ -197,16 +201,49 @@ case "${1:-}" in
                         echo "Note: Make sure you have the 'codex' CLI installed and authenticated."
                     fi
                     ;;
+                gemini)
+                    if [ ! -f "$SETTINGS_FILE" ]; then
+                        echo -e "${RED}No settings file found. Run setup first.${NC}"
+                        exit 1
+                    fi
+
+                    # Switch to Gemini provider
+                    tmp_file="$SETTINGS_FILE.tmp"
+                    if [ -n "$MODEL_ARG" ]; then
+                        UPDATED_COUNT=$(jq --arg old_provider "$OLD_PROVIDER" '[.agents // {} | to_entries[] | select(.value.provider == $old_provider)] | length' "$SETTINGS_FILE" 2>/dev/null)
+                        jq --arg model "$MODEL_ARG" --arg old_provider "$OLD_PROVIDER" '
+                            .models.provider = "gemini" |
+                            .models.gemini.model = $model |
+                            .agents //= {} |
+                            .agents |= with_entries(
+                                if .value.provider == $old_provider then .value.provider = "gemini" | .value.model = $model else . end
+                            )
+                        ' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
+                        echo -e "${GREEN}✓ Switched to Gemini provider with model: $MODEL_ARG${NC}"
+                        if [ "$UPDATED_COUNT" -gt 0 ] 2>/dev/null; then
+                            echo -e "${BLUE}  Updated $UPDATED_COUNT agent(s) from $OLD_PROVIDER to gemini/$MODEL_ARG${NC}"
+                        fi
+                        echo ""
+                        echo "Note: Make sure you have the 'gemini' CLI installed and authenticated."
+                    else
+                        jq '.models.provider = "gemini"' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
+                        echo -e "${GREEN}✓ Switched to Gemini provider${NC}"
+                        echo ""
+                        echo "Use 'tinyclaw model {auto|pro|flash|flash-lite}' to set the model."
+                        echo "Note: Make sure you have the 'gemini' CLI installed and authenticated."
+                    fi
+                    ;;
                 *)
-                    echo "Usage: $0 provider {anthropic|openai} [--model MODEL_NAME]"
+                    echo "Usage: $0 provider {anthropic|openai|gemini} [--model MODEL_NAME]"
                     echo ""
                     echo "Examples:"
                     echo "  $0 provider                                    # Show current provider and model"
                     echo "  $0 provider anthropic                          # Switch to Anthropic"
                     echo "  $0 provider openai                             # Switch to OpenAI"
+                    echo "  $0 provider gemini                             # Switch to Gemini"
                     echo "  $0 provider anthropic --model sonnet           # Switch to Anthropic with Sonnet"
                     echo "  $0 provider openai --model gpt-5.3-codex       # Switch to OpenAI with GPT-5.3 Codex"
-                    echo "  $0 provider openai --model gpt-4o              # Switch to OpenAI with custom model"
+                    echo "  $0 provider gemini --model auto                # Switch to Gemini with Auto"
                     exit 1
                     ;;
             esac
@@ -218,6 +255,10 @@ case "${1:-}" in
                 CURRENT_PROVIDER=$(jq -r '.models.provider // "anthropic"' "$SETTINGS_FILE" 2>/dev/null)
                 if [ "$CURRENT_PROVIDER" = "openai" ]; then
                     CURRENT_MODEL=$(jq -r '.models.openai.model // empty' "$SETTINGS_FILE" 2>/dev/null)
+                elif [ "$CURRENT_PROVIDER" = "gemini" ]; then
+                    CURRENT_MODEL=$(jq -r '.models.gemini.model // empty' "$SETTINGS_FILE" 2>/dev/null)
+                elif [ "$CURRENT_PROVIDER" = "opencode" ]; then
+                    CURRENT_MODEL=$(jq -r '.models.opencode.model // empty' "$SETTINGS_FILE" 2>/dev/null)
                 else
                     CURRENT_MODEL=$(jq -r '.models.anthropic.model // empty' "$SETTINGS_FILE" 2>/dev/null)
                 fi
@@ -291,8 +332,32 @@ case "${1:-}" in
                     echo ""
                     echo "Note: Changes take effect on next message."
                     ;;
+                auto|pro|flash|flash-lite|gemini-2.5-pro|gemini-2.5-flash|gemini-2.5-flash-lite|gemini-3-pro-preview)
+                    if [ ! -f "$SETTINGS_FILE" ]; then
+                        echo -e "${RED}No settings file found. Run setup first.${NC}"
+                        exit 1
+                    fi
+
+                    # Update global default and propagate to all gemini agents
+                    tmp_file="$SETTINGS_FILE.tmp"
+                    jq --arg model "$2" '
+                        .models.gemini.model = $model |
+                        .agents //= {} |
+                        .agents |= with_entries(
+                            if .value.provider == "gemini" then .value.model = $model else . end
+                        )
+                    ' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
+
+                    UPDATED_COUNT=$(jq --arg model "$2" '[.agents // {} | to_entries[] | select(.value.provider == "gemini")] | length' "$SETTINGS_FILE" 2>/dev/null)
+                    echo -e "${GREEN}✓ Model switched to: $2${NC}"
+                    if [ "$UPDATED_COUNT" -gt 0 ] 2>/dev/null; then
+                        echo -e "${BLUE}  Updated $UPDATED_COUNT gemini agent(s)${NC}"
+                    fi
+                    echo ""
+                    echo "Note: Changes take effect on next message."
+                    ;;
                 *)
-                    echo "Usage: $0 model {sonnet|opus|gpt-5.2|gpt-5.3-codex}"
+                    echo "Usage: $0 model {sonnet|opus|gpt-5.2|gpt-5.3-codex|auto|pro|flash|flash-lite}"
                     echo ""
                     echo "Anthropic models:"
                     echo "  sonnet            # Claude Sonnet (fast)"
@@ -302,10 +367,17 @@ case "${1:-}" in
                     echo "  gpt-5.3-codex     # GPT-5.3 Codex"
                     echo "  gpt-5.2           # GPT-5.2"
                     echo ""
+                    echo "Gemini models:"
+                    echo "  auto              # Let Gemini choose"
+                    echo "  pro               # Gemini Pro"
+                    echo "  flash             # Gemini Flash"
+                    echo "  flash-lite        # Gemini Flash Lite"
+                    echo ""
                     echo "Examples:"
                     echo "  $0 model                # Show current model"
                     echo "  $0 model sonnet         # Switch to Claude Sonnet"
                     echo "  $0 model gpt-5.3-codex  # Switch to GPT-5.3 Codex"
+                    echo "  $0 model flash          # Switch to Gemini Flash"
                     exit 1
                     ;;
             esac
@@ -349,8 +421,10 @@ case "${1:-}" in
                     echo "  $0 agent provider coder                                    # Show current provider/model"
                     echo "  $0 agent provider coder anthropic                           # Switch to Anthropic"
                     echo "  $0 agent provider coder openai                              # Switch to OpenAI"
+                    echo "  $0 agent provider coder gemini                              # Switch to Gemini"
                     echo "  $0 agent provider coder anthropic --model opus              # Switch to Anthropic Opus"
                     echo "  $0 agent provider coder openai --model gpt-5.3-codex        # Switch to OpenAI GPT-5.3 Codex"
+                    echo "  $0 agent provider coder gemini --model flash                # Switch to Gemini Flash"
                     exit 1
                 fi
                 agent_provider "$3" "$4" "$5" "$6"
@@ -374,6 +448,7 @@ case "${1:-}" in
                 echo "  $0 agent reset coder"
                 echo "  $0 agent reset coder researcher"
                 echo "  $0 agent provider coder anthropic --model opus"
+                echo "  $0 agent provider coder gemini --model flash"
                 echo ""
                 echo "In chat, use '@agent_id message' to route to a specific agent."
                 exit 1
@@ -500,6 +575,7 @@ case "${1:-}" in
         echo "  $0 start"
         echo "  $0 status"
         echo "  $0 provider openai --model gpt-5.3-codex"
+        echo "  $0 provider gemini --model flash"
         echo "  $0 model opus"
         echo "  $0 reset coder"
         echo "  $0 reset coder researcher"
