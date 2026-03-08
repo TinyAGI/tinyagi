@@ -548,6 +548,9 @@ agent_provider() {
                 echo -e "${RED}base_url is required for custom provider.${NC}"
                 exit 1
             fi
+            if [ -z "$model_arg" ]; then
+                echo -e "${YELLOW}Warning: --model not specified. Existing model name will be kept; it may be incompatible with the custom endpoint.${NC}"
+            fi
             jq --arg id "$agent_id" --arg model "$model_arg" --arg base_url "$new_base_url" \
                 '.agents[$id].provider = "custom" | .agents[$id].base_url = $base_url | if $model != "" then .agents[$id].model = $model else . end' \
                 "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"

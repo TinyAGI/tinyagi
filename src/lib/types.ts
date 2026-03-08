@@ -1,6 +1,6 @@
 export interface AgentConfig {
     name: string;
-    provider: string;       // 'anthropic', 'openai', or 'opencode'
+    provider: string;       // 'anthropic', 'openai', 'opencode', or 'custom' (per-agent only)
     model: string;           // e.g. 'sonnet', 'opus', 'gpt-5.3-codex'
     working_directory: string;
     system_prompt?: string;
