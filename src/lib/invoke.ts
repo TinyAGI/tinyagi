@@ -165,7 +165,7 @@ export async function invokeAgent(
         const baseUrl = agent.base_url.replace(/\/+$/, '');
         // Note: custom provider is stateless — no conversation history is maintained across messages.
         // The shouldReset parameter is ignored. Each call sends only the current message.
-        const apiKey = agent.api_key || process.env.CUSTOM_API_KEY || 'none';
+        const apiKey = agent.api_key || process.env.CUSTOM_API_KEY || '';
 
         let response: Response;
         try {
@@ -190,7 +190,9 @@ export async function invokeAgent(
 
         const data = await response.json() as any;
         const content = data.choices?.[0]?.message?.content || 'No response';
-        return content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        // Only strip <think> blocks for models known to emit them (e.g. Qwen)
+        const stripsThinkBlocks = agent.model?.toLowerCase().includes('qwen');
+        return (stripsThinkBlocks ? content.replace(/<think>[\s\S]*?<\/think>/g, '') : content).trim();
     } else {
         // Default to Claude (Anthropic)
         log('INFO', `Using Claude provider (agent: ${agentId})`);
