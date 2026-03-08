@@ -156,6 +156,28 @@ export async function invokeAgent(
         }
 
         return response || 'Sorry, I could not generate a response from OpenCode.';
+} else if (provider === 'custom') {
+    log('INFO', `Using custom OpenAI-compatible API (agent: ${agentId})`);
+    
+    const baseUrl = agent.base_url || 'http://localhost:30000/v1';
+    const apiKey = agent.api_key || 'none';
+    
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: agent.model,
+            messages: [{ role: 'user', content: message }]
+        })
+    });
+    
+    const data = await response.json() as any;
+    const content = data.choices?.[0]?.message?.content || 'No response';
+    return content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
     } else {
         // Default to Claude (Anthropic)
         log('INFO', `Using Claude provider (agent: ${agentId})`);

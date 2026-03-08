@@ -5,6 +5,8 @@ export interface AgentConfig {
     working_directory: string;
     system_prompt?: string;
     prompt_file?: string;
+    base_url?: string;
+    api_key?: string;
 }
 
 export interface TeamConfig {
