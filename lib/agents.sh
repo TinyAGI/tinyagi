@@ -48,10 +48,7 @@ ensure_agent_skills_links() {
 
 # List all configured agents
 agent_list() {
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo -e "${RED}No settings file found. Run setup first.${NC}"
-        exit 1
-    fi
+    require_settings_file
 
     local agents_count
     agents_count=$(jq -r '(.agents // {}) | length' "$SETTINGS_FILE" 2>/dev/null)
@@ -85,13 +82,10 @@ agent_list() {
 agent_show() {
     local agent_id="$1"
 
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo -e "${RED}No settings file found.${NC}"
-        exit 1
-    fi
+    require_settings_file
 
     local agent_json
-    agent_json=$(jq -r "(.agents // {}).\"${agent_id}\" // empty" "$SETTINGS_FILE" 2>/dev/null)
+    agent_json=$(get_agent_json "${agent_id}")
 
     if [ -z "$agent_json" ]; then
         echo -e "${RED}Agent '${agent_id}' not found.${NC}"
@@ -110,10 +104,7 @@ agent_show() {
 
 # Add a new agent interactively
 agent_add() {
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo -e "${RED}No settings file found. Run setup first.${NC}"
-        exit 1
-    fi
+    require_settings_file
 
     # Load settings to get workspace path
     load_settings
@@ -132,7 +123,7 @@ agent_add() {
 
     # Check if exists
     local existing
-    existing=$(jq -r "(.agents // {}).\"${AGENT_ID}\" // empty" "$SETTINGS_FILE" 2>/dev/null)
+    existing=$(get_agent_json "${AGENT_ID}")
     if [ -n "$existing" ]; then
         echo -e "${RED}Agent '${AGENT_ID}' already exists. Use 'agent remove ${AGENT_ID}' first.${NC}"
         exit 1
@@ -372,17 +363,14 @@ agent_add() {
 agent_remove() {
     local agent_id="$1"
 
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo -e "${RED}No settings file found.${NC}"
-        exit 1
-    fi
+    require_settings_file
 
     # Load settings to get workspace path for cleanup.
     load_settings
     AGENTS_DIR="$WORKSPACE_PATH"
 
     local agent_json
-    agent_json=$(jq -r "(.agents // {}).\"${agent_id}\" // empty" "$SETTINGS_FILE" 2>/dev/null)
+    agent_json=$(get_agent_json "${agent_id}")
 
     if [ -z "$agent_json" ]; then
         echo -e "${RED}Agent '${agent_id}' not found.${NC}"
@@ -537,13 +525,10 @@ agent_provider() {
         esac
     done
 
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo -e "${RED}No settings file found.${NC}"
-        exit 1
-    fi
+    require_settings_file
 
     local agent_json
-    agent_json=$(jq -r "(.agents // {}).\"${agent_id}\" // empty" "$SETTINGS_FILE" 2>/dev/null)
+    agent_json=$(get_agent_json "${agent_id}")
 
     if [ -z "$agent_json" ]; then
         echo -e "${RED}Agent '${agent_id}' not found.${NC}"
@@ -669,10 +654,7 @@ agent_provider() {
 agent_reset() {
     local agent_id="$1"
 
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo -e "${RED}No settings file found.${NC}"
-        exit 1
-    fi
+    require_settings_file
 
     # Load settings if not already loaded
     if [ -z "$AGENTS_DIR" ] || [ "$AGENTS_DIR" = "" ]; then
@@ -681,7 +663,7 @@ agent_reset() {
     fi
 
     local agent_json
-    agent_json=$(jq -r "(.agents // {}).\"${agent_id}\" // empty" "$SETTINGS_FILE" 2>/dev/null)
+    agent_json=$(get_agent_json "${agent_id}")
 
     if [ -z "$agent_json" ]; then
         echo -e "${RED}Agent '${agent_id}' not found.${NC}"
@@ -705,10 +687,7 @@ agent_reset() {
 
 # Reset multiple agents' conversations
 agent_reset_multiple() {
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        echo -e "${RED}No settings file found.${NC}"
-        exit 1
-    fi
+    require_settings_file
 
     load_settings
     AGENTS_DIR="$WORKSPACE_PATH"
