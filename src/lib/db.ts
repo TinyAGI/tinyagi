@@ -292,7 +292,13 @@ function buildInClause(values: readonly string[]): string {
 
 function normalizeSearchTerm(search?: string): string | undefined {
     const trimmed = search?.trim();
-    return trimmed ? `%${trimmed.toLowerCase()}%` : undefined;
+    if (!trimmed) return undefined;
+    const escaped = trimmed
+        .toLowerCase()
+        .replace(/\\/g, '\\\\')
+        .replace(/%/g, '\\%')
+        .replace(/_/g, '\\_');
+    return `%${escaped}%`;
 }
 
 // ── Messages (incoming queue) ────────────────────────────────────────────────
@@ -441,11 +447,11 @@ export function getQueueMessages(options: GetQueueMessagesOptions): QueueMessage
     const searchTerm = normalizeSearchTerm(options.search);
     if (searchTerm) {
         clauses.push(`(
-            LOWER(message) LIKE ?
-            OR LOWER(sender) LIKE ?
-            OR LOWER(message_id) LIKE ?
-            OR LOWER(COALESCE(agent, '')) LIKE ?
-            OR LOWER(COALESCE(conversation_id, '')) LIKE ?
+            LOWER(message) LIKE ? ESCAPE '\\'
+            OR LOWER(sender) LIKE ? ESCAPE '\\'
+            OR LOWER(message_id) LIKE ? ESCAPE '\\'
+            OR LOWER(COALESCE(agent, '')) LIKE ? ESCAPE '\\'
+            OR LOWER(COALESCE(conversation_id, '')) LIKE ? ESCAPE '\\'
         )`);
         params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
@@ -491,12 +497,12 @@ export function getQueueResponses(options: GetQueueResponsesOptions): QueueRespo
     const searchTerm = normalizeSearchTerm(options.search);
     if (searchTerm) {
         clauses.push(`(
-            LOWER(message) LIKE ?
-            OR LOWER(COALESCE(original_message, '')) LIKE ?
-            OR LOWER(sender) LIKE ?
-            OR LOWER(message_id) LIKE ?
-            OR LOWER(COALESCE(agent, '')) LIKE ?
-            OR LOWER(COALESCE(conversation_id, '')) LIKE ?
+            LOWER(message) LIKE ? ESCAPE '\\'
+            OR LOWER(COALESCE(original_message, '')) LIKE ? ESCAPE '\\'
+            OR LOWER(sender) LIKE ? ESCAPE '\\'
+            OR LOWER(message_id) LIKE ? ESCAPE '\\'
+            OR LOWER(COALESCE(agent, '')) LIKE ? ESCAPE '\\'
+            OR LOWER(COALESCE(conversation_id, '')) LIKE ? ESCAPE '\\'
         )`);
         params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }

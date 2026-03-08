@@ -255,7 +255,7 @@ function matchesFilters(entry: LogEntry, options: ReadLogsOptions, sourceFilter:
     if (sourceFilter.length > 0 && !sourceFilter.includes(String(entry.source))) {
         return false;
     }
-    if (options.level && String(entry.level) !== options.level) {
+    if (options.level && String(entry.level).toLowerCase() !== options.level.toLowerCase()) {
         return false;
     }
     if (options.channel && String(entry.channel ?? '') !== options.channel) {

@@ -198,7 +198,7 @@ export async function getQueueRows(params?: {
     searchParams.set("responseStatus", params.responseStatus.join(","));
   }
   if (params?.search) searchParams.set("search", params.search);
-  if (params?.limit) searchParams.set("limit", String(params.limit));
+  if (params?.limit !== undefined) searchParams.set("limit", String(params.limit));
   if (params?.channel) searchParams.set("channel", params.channel);
   if (params?.agentId) searchParams.set("agentId", params.agentId);
   if (params?.sender) searchParams.set("sender", params.sender);
