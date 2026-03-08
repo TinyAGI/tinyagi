@@ -117,13 +117,19 @@ app.put('/api/agents/:id', async (c) => {
     }
 
     logger.info({ agentId }, 'Agent saved');
-    return c.json({
+    const response = {
         ok: !provisionError,
         agent: settings.agents![agentId],
         provisioned: isNew && !provisionError,
         provisionSteps,
         ...(provisionError ? { provisionError } : {}),
-    });
+    };
+
+    if (provisionError) {
+        return c.json(response, 500);
+    }
+
+    return c.json(response);
 });
 
 // DELETE /api/agents/:id

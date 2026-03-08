@@ -256,14 +256,19 @@ client.on(Events.MessageCreate, async (message: Message) => {
             channel: 'discord',
             sender,
             messageId,
-            excerpt: excerptText(messageText || '[attachment only]'),
             context: { fileCount: downloadedFiles.length, senderId: message.author.id },
         }, 'Message received');
+        logger.debug({
+            channel: 'discord',
+            sender,
+            messageId,
+            excerpt: excerptText(messageText || '[attachment only]'),
+        }, 'Message received excerpt');
 
         const pairing = ensureSenderPaired(PAIRING_FILE, 'discord', message.author.id, sender);
         if (!pairing.approved && pairing.code) {
             if (pairing.isNewPending) {
-                logger.info({ channel: 'discord', sender, context: { senderId: message.author.id, pairingCode: pairing.code } }, 'Blocked unpaired sender');
+                logger.info({ channel: 'discord', sender, context: { senderId: message.author.id } }, 'Blocked unpaired sender');
                 await message.reply(pairingMessage(pairing.code));
             } else {
                 logger.info({ channel: 'discord', sender, context: { senderId: message.author.id } }, 'Blocked pending sender without re-sending pairing message');

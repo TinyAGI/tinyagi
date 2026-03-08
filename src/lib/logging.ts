@@ -331,8 +331,18 @@ async function readEntriesForRuntime(
         if (remaining <= 0) {
             break;
         }
-        const entries = await readNewestEntriesFromFile(filePath, remaining, matcher);
-        results.push(...entries);
+        try {
+            const entries = await readNewestEntriesFromFile(filePath, remaining, matcher);
+            results.push(...entries);
+        } catch (error) {
+            const fsError = error as NodeJS.ErrnoException;
+            // listFilesForRuntime() can race with RotatingFileStream.rotateIfNeeded(),
+            // which may rename or remove a file between enumeration and read.
+            if (fsError.code === 'ENOENT' || /no such file/i.test(fsError.message ?? '')) {
+                continue;
+            }
+            throw error;
+        }
     }
     return results;
 }
