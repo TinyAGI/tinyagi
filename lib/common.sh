@@ -159,6 +159,13 @@ normalize_log_level() {
     esac
 }
 
+is_explicit_log_level() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        trace|verbose|debug|info|warn|warning|error|err|fatal) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 log_level_priority() {
     case "$(normalize_log_level "$1")" in
         debug) echo 0 ;;
@@ -175,21 +182,10 @@ log() {
     local threshold
     local msg
 
-    case "$(normalize_log_level "$candidate_level")" in
-        debug|info|warn|error)
-            if [ "$candidate_level" = "$(normalize_log_level "$candidate_level")" ] || \
-               [ "$candidate_level" = "DEBUG" ] || [ "$candidate_level" = "INFO" ] || \
-               [ "$candidate_level" = "WARN" ] || [ "$candidate_level" = "WARNING" ] || \
-               [ "$candidate_level" = "ERROR" ] || [ "$candidate_level" = "verbose" ] || \
-               [ "$candidate_level" = "VERBOSE" ] || [ "$candidate_level" = "trace" ] || \
-               [ "$candidate_level" = "TRACE" ] || [ "$candidate_level" = "fatal" ] || \
-               [ "$candidate_level" = "FATAL" ] || [ "$candidate_level" = "err" ] || \
-               [ "$candidate_level" = "ERR" ]; then
-                level="$(normalize_log_level "$candidate_level")"
-                shift
-            fi
-            ;;
-    esac
+    if is_explicit_log_level "$candidate_level"; then
+        level="$(normalize_log_level "$candidate_level")"
+        shift
+    fi
 
     msg="$*"
     [ -n "$msg" ] || return 0

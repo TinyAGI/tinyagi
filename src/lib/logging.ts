@@ -6,13 +6,12 @@ import pino, { type Logger } from 'pino';
 import { LOG_DIR } from './config';
 
 export type RuntimeLogFile = 'queue' | 'api' | 'telegram' | 'discord' | 'whatsapp' | 'daemon' | 'heartbeat';
-export type LogSource = RuntimeLogFile | 'api';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogEntry {
     time: string;
     level: LogLevel;
-    source: LogSource | string;
+    source: RuntimeLogFile | string;
     component: string;
     msg: string;
     channel?: string;
@@ -36,7 +35,7 @@ export interface LogEntry {
 
 interface CreateLoggerOptions {
     runtime: RuntimeLogFile;
-    source?: LogSource;
+    source?: RuntimeLogFile;
     component: string;
     bindings?: Record<string, unknown>;
 }
@@ -113,6 +112,9 @@ class RotatingFileStream extends Writable {
             return;
         }
 
+        // Closing the old stream is asynchronous, but rotating immediately is safe here:
+        // the file descriptor keeps the old inode alive while renameSync moves the path,
+        // so in-flight writes still land in the pre-rotation file on Unix-like systems.
         this.stream.end();
 
         for (let index = MAX_ROTATED_FILES; index >= 1; index--) {

@@ -3,6 +3,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$PROJECT_ROOT/lib/common.sh"
 if [ -z "$TINYCLAW_HOME" ]; then
     if [ -f "$PROJECT_ROOT/.tinyclaw/settings.json" ]; then
         TINYCLAW_HOME="$PROJECT_ROOT/.tinyclaw"
@@ -11,6 +12,7 @@ if [ -z "$TINYCLAW_HOME" ]; then
     fi
 fi
 LOG_FILE="$TINYCLAW_HOME/logs/heartbeat.log"
+LOG_DIR="$(dirname "$LOG_FILE")"
 SETTINGS_FILE="$TINYCLAW_HOME/settings.json"
 API_PORT="${TINYCLAW_API_PORT:-3777}"
 API_URL="http://localhost:${API_PORT}"
@@ -25,82 +27,16 @@ INTERVAL=${INTERVAL:-3600}
 
 mkdir -p "$(dirname "$LOG_FILE")"
 
-rotate_log_file() {
-    local file="$1"
-    local max_bytes=$((10 * 1024 * 1024))
-    local max_files=5
-
-    [ -f "$file" ] || return 0
-
-    local size
-    size=$(wc -c < "$file" | tr -d ' ')
-    if [ "$size" -lt "$max_bytes" ]; then
-        return 0
-    fi
-
-    local ext="${file##*.}"
-    local base="${file%.*}"
-    local i
-    for ((i=max_files; i>=1; i--)); do
-        local current="${base}.${i}.${ext}"
-        local previous
-        if [ "$i" -eq 1 ]; then
-            previous="$file"
-        else
-            previous="${base}.$((i-1)).${ext}"
-        fi
-
-        [ -f "$previous" ] || continue
-        [ ! -f "$current" ] || rm -f "$current"
-        mv "$previous" "$current"
-    done
-}
-
-normalize_log_level() {
-    local raw
-    raw=$(printf '%s' "${1:-info}" | tr '[:upper:]' '[:lower:]')
-    case "$raw" in
-        trace|verbose) echo "debug" ;;
-        debug) echo "debug" ;;
-        info|"") echo "info" ;;
-        warn|warning) echo "warn" ;;
-        error|err|fatal) echo "error" ;;
-        *) echo "info" ;;
-    esac
-}
-
-log_level_priority() {
-    case "$(normalize_log_level "$1")" in
-        debug) echo 0 ;;
-        info) echo 1 ;;
-        warn) echo 2 ;;
-        error) echo 3 ;;
-        *) echo 1 ;;
-    esac
-}
-
 log() {
     local candidate_level="${1:-}"
     local level="info"
     local threshold
     local msg
-    local timestamp
 
-    case "$(normalize_log_level "$candidate_level")" in
-        debug|info|warn|error)
-            if [ "$candidate_level" = "$(normalize_log_level "$candidate_level")" ] || \
-               [ "$candidate_level" = "DEBUG" ] || [ "$candidate_level" = "INFO" ] || \
-               [ "$candidate_level" = "WARN" ] || [ "$candidate_level" = "WARNING" ] || \
-               [ "$candidate_level" = "ERROR" ] || [ "$candidate_level" = "verbose" ] || \
-               [ "$candidate_level" = "VERBOSE" ] || [ "$candidate_level" = "trace" ] || \
-               [ "$candidate_level" = "TRACE" ] || [ "$candidate_level" = "fatal" ] || \
-               [ "$candidate_level" = "FATAL" ] || [ "$candidate_level" = "err" ] || \
-               [ "$candidate_level" = "ERR" ]; then
-                level="$(normalize_log_level "$candidate_level")"
-                shift
-            fi
-            ;;
-    esac
+    if is_explicit_log_level "$candidate_level"; then
+        level="$(normalize_log_level "$candidate_level")"
+        shift
+    fi
 
     msg="$*"
     [ -n "$msg" ] || return 0
@@ -110,22 +46,8 @@ log() {
         return 0
     fi
 
-    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
-
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg"
-    rotate_log_file "$LOG_FILE"
-    if command -v jq >/dev/null 2>&1; then
-        jq -nc \
-            --arg time "$timestamp" \
-            --arg level "$level" \
-            --arg source "heartbeat" \
-            --arg component "heartbeat" \
-            --arg msg "$msg" \
-            '{time:$time,level:$level,source:$source,component:$component,msg:$msg}' >> "$LOG_FILE"
-    else
-        node -e 'const [time, level, source, component, msg] = process.argv.slice(1); console.log(JSON.stringify({ time, level, source, component, msg }));' \
-            "$timestamp" "$level" "heartbeat" "heartbeat" "$msg" >> "$LOG_FILE"
-    fi
+    write_structured_log "heartbeat" "heartbeat" "$level" "$msg"
 }
 
 log "Heartbeat started (interval: ${INTERVAL}s, API: ${API_URL})"
