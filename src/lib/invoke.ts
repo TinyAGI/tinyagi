@@ -163,7 +163,9 @@ export async function invokeAgent(
             throw new Error(`Custom provider requires base_url to be set for agent: ${agentId}`);
         }
         const baseUrl = agent.base_url.replace(/\/+$/, '');
-        const apiKey = agent.api_key || 'none';
+        // Note: custom provider is stateless — no conversation history is maintained across messages.
+        // The shouldReset parameter is ignored. Each call sends only the current message.
+        const apiKey = agent.api_key || process.env.CUSTOM_API_KEY || 'none';
 
         let response: Response;
         try {
