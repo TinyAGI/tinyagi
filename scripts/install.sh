@@ -26,7 +26,11 @@ fi
 # Determine installation directory
 INSTALL_DIR=""
 
-if [ -w "/usr/local/bin" ]; then
+if [ -n "$TINYCLAW_INSTALL_DIR" ]; then
+    mkdir -p "$TINYCLAW_INSTALL_DIR"
+    INSTALL_DIR="$TINYCLAW_INSTALL_DIR"
+    echo -e "Installing to: ${GREEN}${INSTALL_DIR}${NC} (env override)"
+elif [ -w "/usr/local/bin" ]; then
     INSTALL_DIR="/usr/local/bin"
     echo -e "Installing to: ${GREEN}/usr/local/bin${NC} (system-wide)"
 elif [ -d "$HOME/.local/bin" ]; then

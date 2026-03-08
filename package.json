@@ -6,6 +6,9 @@
     "build": "tsc && tsc -p tsconfig.visualizer.json && echo '{\"type\":\"module\"}' > dist/visualizer/package.json",
     "build:main": "tsc",
     "build:visualizer": "tsc -p tsconfig.visualizer.json && echo '{\"type\":\"module\"}' > dist/visualizer/package.json",
+    "test": "npm run test:integration",
+    "test:integration": "npm run build:main && tsx --test tests/integration/*.test.ts",
+    "test:smoke": "npm run build:main && tsx --test tests/smoke/*.test.ts",
     "whatsapp": "node dist/channels/whatsapp-client.js",
     "discord": "node dist/channels/discord-client.js",
     "telegram": "node dist/channels/telegram-client.js",
@@ -33,6 +36,7 @@
     "@types/node": "^25.2.2",
     "@types/node-telegram-bot-api": "^0.64.13",
     "@types/qrcode-terminal": "^0.12.2",
+    "tsx": "^4.20.5",
     "typescript": "^5.9.3"
   }
 }

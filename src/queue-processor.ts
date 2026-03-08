@@ -162,15 +162,7 @@ async function processMessage(dbMsg: DbMessage): Promise<void> {
 
         // Invoke agent
         emitEvent('chain_step_start', { agentId, agentName: agent.name, fromAgent: messageData.fromAgent || null });
-        let response: string;
-        try {
-            response = await invokeAgent(agent, agentId, message, workspacePath, shouldReset, agents, teams);
-        } catch (error) {
-            const provider = agent.provider || 'anthropic';
-            const providerLabel = provider === 'openai' ? 'Codex' : provider === 'opencode' ? 'OpenCode' : 'Claude';
-            log('ERROR', `${providerLabel} error (agent: ${agentId}): ${(error as Error).message}`);
-            response = "Sorry, I encountered an error processing your request. Please check the queue logs.";
-        }
+        const response = await invokeAgent(agent, agentId, message, workspacePath, shouldReset, agents, teams);
 
         emitEvent('chain_step_done', { agentId, agentName: agent.name, responseLength: response.length, responseText: response });
 
@@ -288,8 +280,24 @@ async function processMessage(dbMsg: DbMessage): Promise<void> {
         dbCompleteMessage(dbMsg.id);
 
     } catch (error) {
-        log('ERROR', `Processing error: ${(error as Error).message}`);
-        failMessage(dbMsg.id, (error as Error).message);
+        const errorMessage = (error as Error).message;
+        log('ERROR', `Processing error: ${errorMessage}`);
+        const failResult = failMessage(dbMsg.id, errorMessage);
+        if (failResult) {
+            const eventData = {
+                id: dbMsg.id,
+                messageId: dbMsg.message_id,
+                agent: dbMsg.agent ?? 'default',
+                channel: dbMsg.channel,
+                sender: dbMsg.sender,
+                retryCount: failResult.retryCount,
+                error: errorMessage,
+            };
+            emitEvent(
+                failResult.status === 'dead' ? 'message_dead' : 'message_retry_scheduled',
+                eventData
+            );
+        }
     }
 }
 

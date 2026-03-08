@@ -10,7 +10,31 @@ permissions:
   contents: write
 
 jobs:
+  verify-smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          PUPPETEER_SKIP_DOWNLOAD=true npm ci --include=dev
+
+      - name: Run smoke tests
+        run: npm run test:smoke
+
   build-and-release:
+    needs: verify-smoke
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +47,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Verify tag matches package version
