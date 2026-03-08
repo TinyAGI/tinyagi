@@ -713,13 +713,13 @@ const apiServer = startApiServer(conversations);
     await recoverConversations();
     await loadPlugins();
     
+    // Register event listener AFTER recovery completes to prevent race
+    queueEvents.on('message:enqueued', () => processQueue());
+    
     log('INFO', 'Queue processor started (SQLite-backed, parallel processing)');
     logAgentConfig();
     await emitEvent('processor_start', { agents: Object.keys(getAgents(getSettings())), teams: Object.keys(getTeams(getSettings())) });
 })();
-
-// Event-driven: all messages come through the API server (same process)
-queueEvents.on('message:enqueued', () => processQueue());
 
 // Check outstanding request timeouts (ACK and response deadlines)
 async function checkRequestTimeouts(): Promise<void> {
