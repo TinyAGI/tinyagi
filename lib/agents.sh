@@ -150,10 +150,12 @@ agent_add() {
     echo "  1) Anthropic (Claude)"
     echo "  2) OpenAI (Codex)"
     echo "  3) OpenCode"
-    read -rp "Choose [1-3, default: 1]: " AGENT_PROVIDER_CHOICE
+    echo "  4) Custom (self-hosted OpenAI-compatible)"
+    read -rp "Choose [1-4, default: 1]: " AGENT_PROVIDER_CHOICE
     case "$AGENT_PROVIDER_CHOICE" in
         2) AGENT_PROVIDER="openai" ;;
         3) AGENT_PROVIDER="opencode" ;;
+        4) AGENT_PROVIDER="custom" ;;
         *) AGENT_PROVIDER="anthropic" ;;
     esac
 
@@ -191,6 +193,8 @@ agent_add() {
             8) read -rp "Enter model name (e.g. provider/model): " AGENT_MODEL ;;
             *) AGENT_MODEL="opencode/claude-sonnet-4-5" ;;
         esac
+    elif [ "$AGENT_PROVIDER" = "custom" ]; then
+        AGENT_MODEL=""
     else
         echo "Model:"
         echo "  1) GPT-5.3 Codex"
@@ -202,6 +206,16 @@ agent_add() {
             3) read -rp "Enter model name: " AGENT_MODEL ;;
             *) AGENT_MODEL="gpt-5.3-codex" ;;
         esac
+    fi
+
+    # Custom provider extras
+    AGENT_BASE_URL=""
+    AGENT_API_KEY=""
+    if [ "$AGENT_PROVIDER" = "custom" ]; then
+        read -rp "Enter model name (e.g. Qwen/Qwen3-32B): " AGENT_MODEL
+        read -rp "Enter base URL (e.g. http://localhost:30000/v1): " AGENT_BASE_URL
+        read -rp "Enter API key (or press Enter for 'none'): " AGENT_API_KEY
+        AGENT_API_KEY="${AGENT_API_KEY:-none}"
     fi
 
     # Working directory - automatically set to agent directory
@@ -217,12 +231,15 @@ agent_add() {
         --arg provider "$AGENT_PROVIDER" \
         --arg model "$AGENT_MODEL" \
         --arg workdir "$AGENT_WORKDIR" \
+        --arg base_url "$AGENT_BASE_URL" \
+        --arg api_key "$AGENT_API_KEY" \
         '{
             name: $name,
             provider: $provider,
             model: $model,
             working_directory: $workdir
-        }')
+        } + (if $base_url != "" then {base_url: $base_url} else {} end)
+          + (if $api_key != "" and $api_key != "none" then {api_key: $api_key} else {} end)')
 
     # Ensure agents section exists and add the new agent
     jq --arg id "$AGENT_ID" --argjson agent "$agent_json" \
