@@ -26,11 +26,9 @@ export function onEvent(listener: EventListener): void {
  * Now async to allow listeners to complete before continuing.
  */
 export async function emitEvent(type: string, data: Record<string, unknown>): Promise<void> {
-    for (const listener of eventListeners) {
-        try { 
-            await listener(type, data); 
-        } catch { 
-            /* never break the queue processor */ 
-        }
-    }
+    await Promise.allSettled(
+        eventListeners.map(listener => {
+            try { return Promise.resolve(listener(type, data)); } catch { return Promise.resolve(); }
+        })
+    );
 }
