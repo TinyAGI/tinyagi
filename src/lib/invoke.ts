@@ -162,7 +162,7 @@ export async function invokeAgent(
         if (!agent.base_url) {
             throw new Error(`Custom provider requires base_url to be set for agent: ${agentId}`);
         }
-        const baseUrl = agent.base_url;
+        const baseUrl = agent.base_url.replace(/\/+$/, '');
         const apiKey = agent.api_key || 'none';
 
         let response: Response;
