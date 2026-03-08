@@ -37,9 +37,60 @@ source "$SCRIPT_DIR/lib/teams.sh"
 source "$SCRIPT_DIR/lib/pairing.sh"
 source "$SCRIPT_DIR/lib/update.sh"
 
+print_help() {
+    local local_names
+    local_names=$(IFS='|'; echo "${ALL_CHANNELS[*]}")
+
+    echo -e "${BLUE}TinyClaw - Claude Code + Messaging Channels${NC}"
+    echo ""
+    echo "Usage: $0 {start|stop|restart|status|setup|send|logs|reset <agent_id>|channels|provider|model|agent|team|pairing|update|attach}"
+    echo ""
+    echo "Commands:"
+    echo "  start                    Start TinyClaw"
+    echo "  stop                     Stop all processes"
+    echo "  restart                  Restart TinyClaw"
+    echo "  status                   Show current status"
+    echo "  setup                    Run setup wizard (change channels/provider/model/heartbeat)"
+    echo "  send <msg>               Send message to AI manually"
+    echo "  logs [type]              View logs ($local_names|heartbeat|daemon|queue|all)"
+    echo "  reset <id> [id2 ...]     Reset specific agent conversation(s)"
+    echo "  channels reset <channel> Reset channel auth ($local_names)"
+    echo "  provider [name] [--model model]  Show or switch AI provider"
+    echo "  model [name]             Show or switch AI model"
+    echo "  agent {list|add|remove|show|reset|provider}  Manage agents"
+    echo "  team {list|add|remove|show|add-agent|remove-agent|visualize}  Manage teams"
+    echo "  pairing {pending|approved|list|approve <code>|unpair <channel> <sender_id>}  Manage sender approvals"
+    echo "  update                   Update TinyClaw to latest version"
+    echo "  attach                   Attach to tmux session"
+    echo ""
+    echo "Examples:"
+    echo "  $0 start"
+    echo "  $0 status"
+    echo "  $0 provider openai --model gpt-5.3-codex"
+    echo "  $0 model opus"
+    echo "  $0 reset coder"
+    echo "  $0 reset coder researcher"
+    echo "  $0 agent list"
+    echo "  $0 agent add"
+    echo "  $0 team list"
+    echo "  $0 team visualize dev"
+    echo "  $0 pairing pending"
+    echo "  $0 pairing approve ABCD1234"
+    echo "  $0 pairing unpair telegram 123456789"
+    echo "  $0 send '@coder fix the bug'"
+    echo "  $0 send '@dev fix the auth bug'"
+    echo "  $0 channels reset whatsapp"
+    echo "  $0 logs telegram"
+    echo ""
+}
+
 # --- Main command dispatch ---
 
 case "${1:-}" in
+    help|-h|--help)
+        print_help
+        exit 0
+        ;;
     start)
         start_daemon
         ;;
@@ -473,48 +524,7 @@ case "${1:-}" in
         do_update
         ;;
     *)
-        local_names=$(IFS='|'; echo "${ALL_CHANNELS[*]}")
-        echo -e "${BLUE}TinyClaw - Claude Code + Messaging Channels${NC}"
-        echo ""
-        echo "Usage: $0 {start|stop|restart|status|setup|send|logs|reset <agent_id>|channels|provider|model|agent|team|pairing|update|attach}"
-        echo ""
-        echo "Commands:"
-        echo "  start                    Start TinyClaw"
-        echo "  stop                     Stop all processes"
-        echo "  restart                  Restart TinyClaw"
-        echo "  status                   Show current status"
-        echo "  setup                    Run setup wizard (change channels/provider/model/heartbeat)"
-        echo "  send <msg>               Send message to AI manually"
-        echo "  logs [type]              View logs ($local_names|heartbeat|daemon|queue|all)"
-        echo "  reset <id> [id2 ...]     Reset specific agent conversation(s)"
-        echo "  channels reset <channel> Reset channel auth ($local_names)"
-        echo "  provider [name] [--model model]  Show or switch AI provider"
-        echo "  model [name]             Show or switch AI model"
-        echo "  agent {list|add|remove|show|reset|provider}  Manage agents"
-        echo "  team {list|add|remove|show|add-agent|remove-agent|visualize}  Manage teams"
-        echo "  pairing {pending|approved|list|approve <code>|unpair <channel> <sender_id>}  Manage sender approvals"
-        echo "  update                   Update TinyClaw to latest version"
-        echo "  attach                   Attach to tmux session"
-        echo ""
-        echo "Examples:"
-        echo "  $0 start"
-        echo "  $0 status"
-        echo "  $0 provider openai --model gpt-5.3-codex"
-        echo "  $0 model opus"
-        echo "  $0 reset coder"
-        echo "  $0 reset coder researcher"
-        echo "  $0 agent list"
-        echo "  $0 agent add"
-        echo "  $0 team list"
-        echo "  $0 team visualize dev"
-        echo "  $0 pairing pending"
-        echo "  $0 pairing approve ABCD1234"
-        echo "  $0 pairing unpair telegram 123456789"
-        echo "  $0 send '@coder fix the bug'"
-        echo "  $0 send '@dev fix the auth bug'"
-        echo "  $0 channels reset whatsapp"
-        echo "  $0 logs telegram"
-        echo ""
+        print_help
         exit 1
         ;;
 esac

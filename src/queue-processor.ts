@@ -46,6 +46,8 @@ import {
 
 // Process a single message from the DB
 async function processMessage(dbMsg: DbMessage): Promise<void> {
+    let resolvedAgentId = dbMsg.agent ?? 'default';
+
     try {
         const channel = dbMsg.channel;
         const sender = dbMsg.sender;
@@ -109,6 +111,7 @@ async function processMessage(dbMsg: DbMessage): Promise<void> {
             agentId = Object.keys(agents)[0];
         }
 
+        resolvedAgentId = agentId;
         const agent = agents[agentId];
         log('INFO', `Routing to agent: ${agent.name} (${agentId}) [${agent.provider}/${agent.model}]`);
         if (!isInternal) {
@@ -166,10 +169,13 @@ async function processMessage(dbMsg: DbMessage): Promise<void> {
         try {
             response = await invokeAgent(agent, agentId, message, workspacePath, shouldReset, agents, teams);
         } catch (error) {
-            const provider = agent.provider || 'anthropic';
-            const providerLabel = provider === 'openai' ? 'Codex' : provider === 'opencode' ? 'OpenCode' : 'Claude';
-            log('ERROR', `${providerLabel} error (agent: ${agentId}): ${(error as Error).message}`);
-            response = "Sorry, I encountered an error processing your request. Please check the queue logs.";
+            emitEvent('chain_step_done', {
+                agentId,
+                agentName: agent.name,
+                responseLength: 0,
+                error: (error as Error).message,
+            });
+            throw error;
         }
 
         emitEvent('chain_step_done', { agentId, agentName: agent.name, responseLength: response.length, responseText: response });
@@ -288,8 +294,40 @@ async function processMessage(dbMsg: DbMessage): Promise<void> {
         dbCompleteMessage(dbMsg.id);
 
     } catch (error) {
-        log('ERROR', `Processing error: ${(error as Error).message}`);
-        failMessage(dbMsg.id, (error as Error).message);
+        const errorMessage = (error as Error).message;
+        log('ERROR', `Processing error: ${errorMessage}`);
+        const failResult = failMessage(dbMsg.id, errorMessage);
+        if (failResult) {
+            const eventData = {
+                id: dbMsg.id,
+                messageId: dbMsg.message_id,
+                agent: resolvedAgentId,
+                channel: dbMsg.channel,
+                sender: dbMsg.sender,
+                retryCount: failResult.retryCount,
+                error: errorMessage,
+            };
+            emitEvent(
+                failResult.status === 'dead' ? 'message_dead' : 'message_retry_scheduled',
+                eventData
+            );
+
+            if (failResult.status === 'dead' && dbMsg.conversation_id) {
+                const conv = conversations.get(dbMsg.conversation_id);
+                if (conv) {
+                    await withConversationLock(conv.id, async () => {
+                        conv.pendingAgents.delete(resolvedAgentId);
+                        const shouldComplete = decrementPending(conv);
+
+                        if (shouldComplete) {
+                            completeConversation(conv);
+                        } else {
+                            log('INFO', `Conversation ${conv.id}: ${conv.pending} branch(es) still pending after dead branch @${resolvedAgentId}`);
+                        }
+                    });
+                }
+            }
+        }
     }
 }
 

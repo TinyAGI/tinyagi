@@ -7,10 +7,12 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-and-release:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Verify tag matches package version
@@ -63,6 +65,7 @@ jobs:
         run: npm prune --omit=dev
 
       - name: Create bundle tarball
+        id: bundle
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
           BUNDLE_NAME="tinyclaw-bundle.tar.gz"
@@ -80,6 +83,7 @@ jobs:
           cp -r lib/ "$BUNDLE_DIR/"
           cp -r docs/ "$BUNDLE_DIR/"
           cp -r .agents/ "$BUNDLE_DIR/"
+          cp -r tests/ "$BUNDLE_DIR/"
 
           cp tinyclaw.sh "$BUNDLE_DIR/"
 
@@ -114,10 +118,72 @@ jobs:
           echo "bundle_name=$BUNDLE_NAME" >> $GITHUB_OUTPUT
           echo "bundle_size=$BUNDLE_SIZE" >> $GITHUB_OUTPUT
 
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinyclaw-bundle
+          path: tinyclaw-bundle.tar.gz
+          retention-days: 7
+
+  verify-smoke:
+    needs: build-and-release
+    permissions:
+      contents: read
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Download bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tinyclaw-bundle
+
+      - name: Extract bundle
+        shell: bash
+        run: |
+          EXTRACT_DIR="$(mktemp -d)"
+          tar -xzf tinyclaw-bundle.tar.gz -C "$EXTRACT_DIR"
+          echo "BUNDLE_DIR=$EXTRACT_DIR/tinyclaw" >> "$GITHUB_ENV"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ${{ env.BUNDLE_DIR }}
+        run: |
+          PUPPETEER_SKIP_DOWNLOAD=true npm ci --include=dev
+
+      - name: Run smoke tests
+        working-directory: ${{ env.BUNDLE_DIR }}
+        run: npm run test:smoke
+
+  publish-release:
+    if: github.ref_type == 'tag'
+    needs: verify-smoke
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tinyclaw-bundle
+
       - name: Extract release notes from tag
         id: release_notes
         run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
+          VERSION="${GITHUB_REF#refs/tags/}"
           # Use for-each-ref to reliably get the annotated tag message (not the commit message)
           TAG_MESSAGE=$(git for-each-ref --format='%(contents)' "refs/tags/$VERSION")
           if [ -n "$TAG_MESSAGE" ]; then
@@ -132,7 +198,6 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
-        if: github.ref_type == 'tag'
         with:
           body_path: release_notes.md
           files: |
@@ -141,11 +206,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload artifact (for non-tag builds)
-        if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v4
-        with:
-          name: tinyclaw-bundle
-          path: tinyclaw-bundle.tar.gz
-          retention-days: 7

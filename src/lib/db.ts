@@ -47,6 +47,11 @@ export interface DbResponse {
     acked_at: number | null;
 }
 
+export interface FailMessageResult {
+    retryCount: number;
+    status: 'pending' | 'dead';
+}
+
 export interface EnqueueMessageData {
     channel: string;
     sender: string;
@@ -74,7 +79,7 @@ export interface EnqueueResponseData {
 // ── Singleton ────────────────────────────────────────────────────────────────
 
 const QUEUE_DB_PATH = path.join(TINYCLAW_HOME, 'tinyclaw.db');
-const MAX_RETRIES = 5;
+export const MAX_RETRIES = 5;
 
 let db: Database.Database | null = null;
 
@@ -206,10 +211,10 @@ export function completeMessage(rowId: number): void {
     `).run(Date.now(), rowId);
 }
 
-export function failMessage(rowId: number, error: string): void {
+export function failMessage(rowId: number, error: string): FailMessageResult | null {
     const d = getDb();
     const msg = d.prepare('SELECT retry_count FROM messages WHERE id = ?').get(rowId) as { retry_count: number } | undefined;
-    if (!msg) return;
+    if (!msg) return null;
 
     const newCount = msg.retry_count + 1;
     const newStatus = newCount >= MAX_RETRIES ? 'dead' : 'pending';
@@ -218,6 +223,15 @@ export function failMessage(rowId: number, error: string): void {
         UPDATE messages SET status = ?, retry_count = ?, last_error = ?, claimed_by = NULL, updated_at = ?
         WHERE id = ?
     `).run(newStatus, newCount, error, Date.now(), rowId);
+
+    if (newStatus === 'pending') {
+        queueEvents.emit('message:enqueued', { id: rowId, retryCount: newCount });
+    }
+
+    return {
+        retryCount: newCount,
+        status: newStatus,
+    };
 }
 
 // ── Responses (outgoing queue) ───────────────────────────────────────────────
@@ -296,6 +310,9 @@ export function retryDeadMessage(rowId: number): boolean {
         UPDATE messages SET status = 'pending', retry_count = 0, claimed_by = NULL, updated_at = ?
         WHERE id = ? AND status = 'dead'
     `).run(Date.now(), rowId);
+    if (result.changes > 0) {
+        queueEvents.emit('message:enqueued', { id: rowId, retryCount: 0 });
+    }
     return result.changes > 0;
 }
 

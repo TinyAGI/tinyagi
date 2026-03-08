@@ -5,6 +5,7 @@ import { AgentConfig, TeamConfig } from './types';
 import { SCRIPT_DIR, resolveClaudeModel, resolveCodexModel, resolveOpenCodeModel } from './config';
 import { log } from './logging';
 import { ensureAgentDirectory, updateAgentTeammates } from './agent';
+import { fakeProvider } from '../providers/fake-provider';
 
 export async function runCommand(command: string, args: string[], cwd?: string): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -80,7 +81,13 @@ export async function invokeAgent(
 
     const provider = agent.provider || 'anthropic';
 
-    if (provider === 'openai') {
+    if (provider === 'fake') {
+        if (process.env.NODE_ENV !== 'test' && !process.env.TINYCLAW_ALLOW_FAKE_PROVIDER) {
+            throw new Error('Fake provider is only available in test environments');
+        }
+        log('INFO', `Using Fake provider (agent: ${agentId})`);
+        return await fakeProvider(message);
+    } else if (provider === 'openai') {
         log('INFO', `Using Codex CLI (agent: ${agentId})`);
 
         const shouldResume = !shouldReset;
