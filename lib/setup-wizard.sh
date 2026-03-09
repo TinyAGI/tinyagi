@@ -524,27 +524,33 @@ DISCORD_TOKEN="$(_get_token discord)"
 TELEGRAM_TOKEN="$(_get_token telegram)"
 
 # Write settings.json with layered structure
-# Use jq --arg for all values to safely escape special characters in models/keys
+# Use jq -cn --arg to safely escape special characters (quotes, backslashes) in API keys.
+# Produces compact JSON object, then strips outer { } to get a bare "models": {...} fragment
+# for embedding in the heredoc below.
+_jq_models_fragment() {
+    local raw
+    raw=$(jq -cn "$@")
+    # Strip outer braces: {"models":...} → "models":...
+    raw="${raw#\{}"
+    raw="${raw%\}}"
+    echo "$raw"
+}
+
 if [ "$PROVIDER" = "anthropic" ]; then
-    MODELS_SECTION=$(jq -n --arg m "$MODEL" \
-        '"models": { "provider": "anthropic", "anthropic": { "model": $m } }' \
-        | tr -d '\n')
+    MODELS_SECTION=$(_jq_models_fragment --arg m "$MODEL" \
+        '{"models": {"provider": "anthropic", "anthropic": {"model": $m}}}')
 elif [ "$PROVIDER" = "opencode" ]; then
-    MODELS_SECTION=$(jq -n --arg m "$MODEL" \
-        '"models": { "provider": "opencode", "opencode": { "model": $m } }' \
-        | tr -d '\n')
+    MODELS_SECTION=$(_jq_models_fragment --arg m "$MODEL" \
+        '{"models": {"provider": "opencode", "opencode": {"model": $m}}}')
 elif [ "$PROVIDER" = "kimi" ]; then
-    MODELS_SECTION=$(jq -n --arg m "$MODEL" --arg k "$API_KEY" \
-        '"models": { "provider": "kimi", "kimi": { "model": $m, "apiKey": $k } }' \
-        | tr -d '\n')
+    MODELS_SECTION=$(_jq_models_fragment --arg m "$MODEL" --arg k "$API_KEY" \
+        '{"models": {"provider": "kimi", "kimi": {"model": $m, "apiKey": $k}}}')
 elif [ "$PROVIDER" = "minimax" ]; then
-    MODELS_SECTION=$(jq -n --arg m "$MODEL" --arg k "$API_KEY" \
-        '"models": { "provider": "minimax", "minimax": { "model": $m, "apiKey": $k } }' \
-        | tr -d '\n')
+    MODELS_SECTION=$(_jq_models_fragment --arg m "$MODEL" --arg k "$API_KEY" \
+        '{"models": {"provider": "minimax", "minimax": {"model": $m, "apiKey": $k}}}')
 else
-    MODELS_SECTION=$(jq -n --arg m "$MODEL" \
-        '"models": { "provider": "openai", "openai": { "model": $m } }' \
-        | tr -d '\n')
+    MODELS_SECTION=$(_jq_models_fragment --arg m "$MODEL" \
+        '{"models": {"provider": "openai", "openai": {"model": $m}}}')
 fi
 
 cat > "$SETTINGS_FILE" <<EOF
