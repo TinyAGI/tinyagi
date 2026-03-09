@@ -5,6 +5,7 @@ import { CHATS_DIR, getSettings, getAgents } from './config';
 import { log, emitEvent } from './logging';
 import { enqueueMessage, enqueueResponse, insertChatMessage } from './db';
 import { handleLongResponse, collectFiles } from './response';
+import { convertTagsToReadable } from './routing';
 
 // Active conversations — tracks in-flight team message passing
 export const conversations = new Map<string, Conversation>();
@@ -203,7 +204,7 @@ export function completeConversation(conv: Conversation): void {
     }
 
     // Convert [@agent: ...] tags to readable format instead of stripping them
-    finalResponse = finalResponse.replace(/\[@(\S+?):\s*([\s\S]*?)\]/g, '→ @$1: $2').trim();
+    finalResponse = convertTagsToReadable(finalResponse);
 
     // Handle long responses — send as file attachment
     const { message: responseMessage, files: allFiles } = handleLongResponse(finalResponse, outboundFiles);
