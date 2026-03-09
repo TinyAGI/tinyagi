@@ -6,6 +6,7 @@
  */
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import readline from 'readline';
 import { ensureSenderPaired } from '../lib/pairing';
@@ -15,7 +16,7 @@ const _localTinyclaw = path.join(SCRIPT_DIR, '.tinyclaw');
 const TINYCLAW_HOME = process.env.TINYCLAW_HOME
     || (fs.existsSync(path.join(_localTinyclaw, 'settings.json'))
         ? _localTinyclaw
-        : path.join(require('os').homedir(), '.tinyclaw'));
+        : path.join(os.homedir(), '.tinyclaw'));
 
 const QUEUE_INCOMING = path.join(TINYCLAW_HOME, 'queue/incoming');
 const QUEUE_OUTGOING = path.join(TINYCLAW_HOME, 'queue/outgoing');
@@ -31,6 +32,7 @@ const PAIRING_FILE = path.join(TINYCLAW_HOME, 'pairing.json');
 
 const CHANNEL_ID = 'tui';
 const REQUIRE_PAIRING = process.env.TUI_REQUIRE_PAIRING === '1';
+const PENDING_TIMEOUT_MS = 60_000;
 let senderId = process.env.TUI_SENDER_ID || `local_${process.pid}`;
 let senderName = process.env.TUI_SENDER_NAME || senderId;
 
@@ -75,6 +77,7 @@ function enqueueMessage(message: string, messageId: string): void {
     };
     const queueFile = path.join(QUEUE_INCOMING, `tui_${messageId}.json`);
     fs.writeFileSync(queueFile, JSON.stringify(payload, null, 2));
+    log('INFO', `Enqueued message ${messageId} from ${senderName} (${senderId})`);
 }
 
 function pairingMessage(code: string): string {
@@ -95,7 +98,21 @@ function printResponse(text: string): void {
     rl.prompt(true);
 }
 
+function expirePending(): void {
+    const now = Date.now();
+    for (const [messageId, item] of pending.entries()) {
+        if (now - item.createdAt < PENDING_TIMEOUT_MS) {
+            continue;
+        }
+
+        pending.delete(messageId);
+        log('WARN', `Timed out waiting for response to ${messageId}`);
+        printResponse('Request timed out waiting for TinyClaw.');
+    }
+}
+
 function checkOutgoing(): void {
+    expirePending();
     if (pending.size === 0) {
         return;
     }
@@ -104,6 +121,7 @@ function checkOutgoing(): void {
         files = fs.readdirSync(QUEUE_OUTGOING)
             .filter(f => f.startsWith('tui_') && f.endsWith('.json'));
     } catch {
+        log('WARN', `Unable to read outgoing queue: ${QUEUE_OUTGOING}`);
         return;
     }
 
@@ -113,6 +131,7 @@ function checkOutgoing(): void {
         try {
             data = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as ResponseData;
         } catch {
+            log('WARN', `Skipping unreadable response file: ${file}`);
             continue;
         }
         if (!data || data.channel !== CHANNEL_ID) continue;
@@ -120,6 +139,7 @@ function checkOutgoing(): void {
 
         pending.delete(data.messageId);
         try { fs.unlinkSync(fullPath); } catch { /* ignore */ }
+        log('INFO', `Received response for ${data.messageId}`);
 
         if (data.files && data.files.length > 0) {
             printResponse(`${data.message}\n\n[files]\n${data.files.join('\n')}`);
@@ -138,6 +158,7 @@ const rl = readline.createInterface({
 function shutdown(): void {
     if (shuttingDown) return;
     shuttingDown = true;
+    log('INFO', 'Shutting down TUI client');
     rl.close();
     process.stdout.write('\n');
 }
@@ -145,6 +166,7 @@ function shutdown(): void {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
+log('INFO', `Starting TUI client for ${senderName} (${senderId})`);
 process.stdout.write('TinyClaw TUI (stdin/stdout)\n');
 function showHelp(): void {
     const helpLines = [
