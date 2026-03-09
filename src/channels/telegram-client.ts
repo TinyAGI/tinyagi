@@ -14,6 +14,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { ensureSenderPaired } from '../lib/pairing';
+import { applyDefaultAgent } from './default-agent';
 
 const API_PORT = parseInt(process.env.TINYCLAW_API_PORT || '3777', 10);
 const API_BASE = `http://localhost:${API_PORT}`;
@@ -439,6 +440,15 @@ bot.on('message', async (msg: TelegramBot.Message) => {
             const { exec } = require('child_process');
             exec(`"${path.join(SCRIPT_DIR, 'tinyclaw.sh')}" restart`, { detached: true, stdio: 'ignore' });
             return;
+        }
+
+        // Apply default agent routing
+        const { message: routedMessage, switchNotification } = applyDefaultAgent(
+            senderId, messageText, SETTINGS_FILE,
+        );
+        messageText = routedMessage;
+        if (switchNotification) {
+            await bot.sendMessage(msg.chat.id, switchNotification);
         }
 
         // Show typing indicator

@@ -12,6 +12,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { ensureSenderPaired } from '../lib/pairing';
+import { applyDefaultAgent } from './default-agent';
 
 const API_PORT = parseInt(process.env.TINYCLAW_API_PORT || '3777', 10);
 const API_BASE = `http://localhost:${API_PORT}`;
@@ -327,6 +328,15 @@ client.on(Events.MessageCreate, async (message: Message) => {
             const { exec } = require('child_process');
             exec(`"${path.join(SCRIPT_DIR, 'tinyclaw.sh')}" restart`, { detached: true, stdio: 'ignore' });
             return;
+        }
+
+        // Apply default agent routing
+        const { message: routedMessage, switchNotification } = applyDefaultAgent(
+            message.author.id, messageText, SETTINGS_FILE,
+        );
+        messageText = routedMessage;
+        if (switchNotification) {
+            await (message.channel as DMChannel).send(switchNotification);
         }
 
         // Show typing indicator
