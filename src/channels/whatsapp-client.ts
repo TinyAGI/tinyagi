@@ -10,7 +10,7 @@ import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 import path from 'path';
 import { ensureSenderPaired } from '../lib/pairing';
-import { applyDefaultAgent } from './default-agent';
+import { applyDefaultAgent, initPersistence } from './default-agent';
 
 const API_PORT = parseInt(process.env.TINYCLAW_API_PORT || '3777', 10);
 const API_BASE = `http://localhost:${API_PORT}`;
@@ -33,6 +33,9 @@ const PAIRING_FILE = path.join(TINYCLAW_HOME, 'pairing.json');
         fs.mkdirSync(dir, { recursive: true });
     }
 });
+
+// Load persisted default-agent-per-chat mappings
+initPersistence(TINYCLAW_HOME);
 
 interface PendingMessage {
     message: Message;
@@ -334,10 +337,13 @@ client.on('message_create', async (message: Message) => {
         const { message: routedMessage, switchNotification } = applyDefaultAgent(
             message.from, messageText, SETTINGS_FILE,
         );
-        messageText = routedMessage;
         if (switchNotification) {
             await chat.sendMessage(switchNotification);
         }
+        if (routedMessage === null) {
+            return;
+        }
+        messageText = routedMessage;
 
         // Show typing indicator
         await chat.sendStateTyping();

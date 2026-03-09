@@ -4,12 +4,43 @@
  * When a user sends `@agent_id message`, the channel client stores that agent
  * as the default for the chat. Subsequent messages without an @-prefix are
  * automatically routed to the stored default agent.
+ *
+ * Defaults persist across restarts via a JSON file in TINYCLAW_HOME.
  */
 
 import fs from 'fs';
+import path from 'path';
 
 // Per-chat default agent: chatKey → agentId (the raw @-prefix value)
-const defaultAgentPerChat = new Map<string, string>();
+let defaultAgentPerChat = new Map<string, string>();
+let persistPath: string | null = null;
+
+/**
+ * Initialize persistence. Call once at startup with the TINYCLAW_HOME path.
+ * If not called, defaults are in-memory only.
+ */
+export function initPersistence(tinyclawHome: string): void {
+    persistPath = path.join(tinyclawHome, 'default-agents.json');
+    try {
+        if (fs.existsSync(persistPath)) {
+            const data = JSON.parse(fs.readFileSync(persistPath, 'utf8'));
+            defaultAgentPerChat = new Map(Object.entries(data));
+        }
+    } catch {
+        // Corrupt or unreadable — start fresh
+    }
+}
+
+function saveDefaults(): void {
+    if (!persistPath) return;
+    try {
+        const dir = path.dirname(persistPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(persistPath, JSON.stringify(Object.fromEntries(defaultAgentPerChat)));
+    } catch {
+        // Best-effort persistence
+    }
+}
 
 interface AgentMatchResult {
     /** The @-prefix value the user typed (e.g. "coder") */
@@ -66,6 +97,8 @@ export function resolveAgentTag(candidateTag: string, settingsFile: string): Age
  *
  * - If the message starts with `@tag`, validate the tag and store it as default.
  *   Returns the original message unchanged plus a switch confirmation message.
+ * - If the message is just `@tag` with no body, switches the default and returns
+ *   null message to indicate no message should be queued.
  * - If the message has no `@tag` but a default is stored, prepends the default tag.
  * - Otherwise returns the message unchanged.
  */
@@ -73,22 +106,42 @@ export function applyDefaultAgent(
     chatKey: string,
     messageText: string,
     settingsFile: string,
-): { message: string; switchNotification: string | null } {
-    const atMatch = messageText.match(/^@(\S+)\s+([\s\S]*)$/);
+): { message: string | null; switchNotification: string | null } {
+    // Match @tag with optional space+body (handles both "@coder fix bug" and "@coder")
+    const atMatch = messageText.match(/^@(\S+)(?:\s+([\s\S]*))?$/);
 
     if (atMatch) {
         const candidateTag = atMatch[1];
+        const body = atMatch[2]?.trim() || '';
+
+        // Special case: "@default" clears the sticky default
+        if (candidateTag.toLowerCase() === 'default') {
+            const had = defaultAgentPerChat.has(chatKey);
+            defaultAgentPerChat.delete(chatKey);
+            saveDefaults();
+            if (had) {
+                return { message: null, switchNotification: 'Cleared default agent. Messages will use default routing.' };
+            }
+            return { message: null, switchNotification: 'No default agent was set.' };
+        }
+
         const match = resolveAgentTag(candidateTag, settingsFile);
         if (match) {
             const previous = defaultAgentPerChat.get(chatKey);
             defaultAgentPerChat.set(chatKey, match.tag);
+            saveDefaults();
 
             // Only notify if the default actually changed
             const switched = previous !== match.tag;
             const kind = match.isTeam ? 'team' : 'agent';
             const notification = switched
-                ? `Switched to ${kind} @${match.tag} (${match.displayName}). Future messages will be routed here automatically.`
+                ? `Switched to ${kind} @${match.tag} (${match.displayName}). Future messages will be routed here automatically. Send @default to clear.`
                 : null;
+
+            if (!body) {
+                // Tag-only message like "@coder" — just switch, don't queue a message
+                return { message: null, switchNotification: notification };
+            }
 
             // Pass through the original message (server will also parse the @tag)
             return { message: messageText, switchNotification: notification };
@@ -118,4 +171,5 @@ export function getDefaultAgent(chatKey: string): string | null {
  */
 export function clearDefaultAgent(chatKey: string): void {
     defaultAgentPerChat.delete(chatKey);
+    saveDefaults();
 }

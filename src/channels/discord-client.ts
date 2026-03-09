@@ -12,7 +12,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { ensureSenderPaired } from '../lib/pairing';
-import { applyDefaultAgent } from './default-agent';
+import { applyDefaultAgent, initPersistence } from './default-agent';
 
 const API_PORT = parseInt(process.env.TINYCLAW_API_PORT || '3777', 10);
 const API_BASE = `http://localhost:${API_PORT}`;
@@ -34,6 +34,9 @@ const PAIRING_FILE = path.join(TINYCLAW_HOME, 'pairing.json');
         fs.mkdirSync(dir, { recursive: true });
     }
 });
+
+// Load persisted default-agent-per-chat mappings
+initPersistence(TINYCLAW_HOME);
 
 // Validate bot token
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -334,10 +337,13 @@ client.on(Events.MessageCreate, async (message: Message) => {
         const { message: routedMessage, switchNotification } = applyDefaultAgent(
             message.author.id, messageText, SETTINGS_FILE,
         );
-        messageText = routedMessage;
         if (switchNotification) {
             await (message.channel as DMChannel).send(switchNotification);
         }
+        if (routedMessage === null) {
+            return;
+        }
+        messageText = routedMessage;
 
         // Show typing indicator
         await (message.channel as DMChannel).sendTyping();
