@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { usePolling } from "@/lib/hooks";
-import { timeAgo } from "@/lib/hooks";
+
 import {
   getAgents,
   getTeams,
+  sendMessage,
   subscribeToEvents,
   type AgentConfig,
   type TeamConfig,
   type EventData,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Send, Loader2 } from "lucide-react";
 
 // Sprite keys cycle for agents beyond the 3 built-in chars
 const SPRITE_KEYS = ["char_1", "char_2", "char_3", "char_player"];
@@ -43,14 +45,6 @@ interface SpeechBubble {
   message: string;
   timestamp: number;
   targetAgents: string[];
-}
-
-interface StatusEvent {
-  id: string;
-  type: string;
-  agentId?: string;
-  timestamp: number;
-  detail?: string;
 }
 
 // Extract all @mention targets from message text
@@ -116,7 +110,9 @@ export default function OfficePage() {
   const { data: agents } = usePolling<Record<string, AgentConfig>>(getAgents, 5000);
   const { data: teams } = usePolling<Record<string, TeamConfig>>(getTeams, 5000);
   const [bubbles, setBubbles] = useState<SpeechBubble[]>([]);
-  const [statusEvents, setStatusEvents] = useState<StatusEvent[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [sending, setSending] = useState(false);
+
   const [connected, setConnected] = useState(false);
   const seenRef = useRef(new Set<string>());
 
@@ -218,30 +214,8 @@ export default function OfficePage() {
         const e = event as Record<string, unknown>;
         const agentId = e.agentId ? String(e.agentId) : undefined;
 
-        // Events that produce speech bubbles (agent actually says something)
-        if (
-          event.type === "chain_step_done" ||
-          event.type === "response_ready"
-        ) {
-          const msg =
-            (e.responseText as string) ||
-            (e.message as string) ||
-            "";
-          if (msg && agentId) {
-            const targets = extractTargets(msg);
-            const bubble: SpeechBubble = {
-              id: `${event.timestamp}-${Math.random().toString(36).slice(2, 6)}`,
-              agentId,
-              message: msg,
-              timestamp: event.timestamp,
-              targetAgents: targets,
-            };
-            setBubbles((prev) => [...prev, bubble].slice(-50));
-          }
-        }
-
-        // Events that produce a sent message bubble
-        if (event.type === "message_received") {
+        // User sent a message
+        if (event.type === "message_enqueued") {
           const msg = (e.message as string) || "";
           const sender = (e.sender as string) || "User";
           if (msg) {
@@ -257,29 +231,20 @@ export default function OfficePage() {
           }
         }
 
-        // Status bar events (chain mechanics)
-        const statusTypes = [
-          "agent_routed",
-          "chain_step_start",
-          "chain_handoff",
-          "team_chain_start",
-          "team_chain_end",
-          "message_enqueued",
-          "processor_start",
-        ];
-        if (statusTypes.includes(event.type)) {
-          setStatusEvents((prev) =>
-            [
-              {
-                id: `${event.timestamp}-${Math.random().toString(36).slice(2, 6)}`,
-                type: event.type,
-                agentId,
-                timestamp: event.timestamp,
-                detail: (e.message as string) || (e.teamId ? `team:${e.teamId}` : undefined),
-              },
-              ...prev,
-            ].slice(0, 20)
-          );
+        // Agent/team final response
+        if (event.type === "response_ready") {
+          const msg = (e.responseText as string) || "";
+          if (msg && agentId) {
+            const targets = extractTargets(msg);
+            const bubble: SpeechBubble = {
+              id: `${event.timestamp}-${Math.random().toString(36).slice(2, 6)}`,
+              agentId,
+              message: msg,
+              timestamp: event.timestamp,
+              targetAgents: targets,
+            };
+            setBubbles((prev) => [...prev, bubble].slice(-50));
+          }
         }
       },
       () => setConnected(false)
@@ -295,6 +260,26 @@ export default function OfficePage() {
     }, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleSend = useCallback(async () => {
+    if (!chatInput.trim() || sending) return;
+    setSending(true);
+    try {
+      await sendMessage({ message: chatInput, sender: "Web", channel: "web" });
+      setChatInput("");
+    } catch {
+      // errors surface via SSE events
+    } finally {
+      setSending(false);
+    }
+  }, [chatInput, sending]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -481,29 +466,28 @@ export default function OfficePage() {
         </div>
       </div>
 
-      {/* Status bar for chain events */}
-      <div className="border-t bg-card px-4 py-2 shrink-0">
-        <div className="flex items-center gap-2 overflow-x-auto">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">
-            Activity
-          </span>
-          {statusEvents.length === 0 ? (
-            <span className="text-[10px] text-muted-foreground/50">No recent activity</span>
-          ) : (
-            statusEvents.slice(0, 8).map((evt) => (
-              <div key={evt.id} className="flex items-center gap-1.5 shrink-0">
-                <div className={`h-1.5 w-1.5 shrink-0 ${statusColor(evt.type)}`} />
-                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                  {evt.type.replace(/_/g, " ")}
-                  {evt.agentId ? ` @${evt.agentId}` : ""}
-                </span>
-                <span className="text-[9px] text-muted-foreground/50">
-                  {timeAgo(evt.timestamp)}
-                </span>
-                <span className="text-muted-foreground/20 mx-0.5">|</span>
-              </div>
-            ))
-          )}
+      {/* Composer */}
+      <div className="border-t px-4 py-2 shrink-0">
+        <div className="flex gap-2 items-center">
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Message @agent or @team..."
+            className="flex-1 bg-transparent text-sm border border-border rounded-sm px-3 py-1.5 focus:outline-none focus:border-primary"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!chatInput.trim() || sending}
+            className="h-8 w-8 shrink-0 flex items-center justify-center text-muted-foreground hover:text-primary disabled:opacity-30"
+          >
+            {sending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5" />
+            )}
+          </button>
         </div>
       </div>
     </div>
@@ -540,23 +524,3 @@ function SpeechBubbleEl({ bubble }: { bubble: SpeechBubble }) {
   );
 }
 
-function statusColor(type: string): string {
-  switch (type) {
-    case "agent_routed":
-      return "bg-blue-500";
-    case "chain_step_start":
-      return "bg-yellow-500";
-    case "chain_handoff":
-      return "bg-orange-500";
-    case "team_chain_start":
-      return "bg-purple-500";
-    case "team_chain_end":
-      return "bg-purple-400";
-    case "message_enqueued":
-      return "bg-cyan-500";
-    case "processor_start":
-      return "bg-primary";
-    default:
-      return "bg-muted-foreground/40";
-  }
-}

@@ -201,7 +201,7 @@ export async function completeConversation(conv: Conversation): Promise<void> {
     });
 
     log('INFO', `Response ready [${conv.channel}] ${conv.sender} (${finalResponse.length} chars)`);
-    emitEvent('response_ready', { channel: conv.channel, sender: conv.sender, responseLength: finalResponse.length, responseText: finalResponse, messageId: conv.messageId });
+    emitEvent('response_ready', { channel: conv.channel, sender: conv.sender, agentId: conv.teamContext.team.leader_agent, responseLength: finalResponse.length, responseText: finalResponse, messageId: conv.messageId });
 
     // Clean up
     conversations.delete(conv.id);
