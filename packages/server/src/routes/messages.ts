@@ -21,7 +21,7 @@ app.post('/api/message', async (c) => {
 
     const fullMessage = (channel && sender) ? `${message}\n\n— ${sender} via ${channel}` : message;
 
-    enqueueMessage({
+    const rowId = enqueueMessage({
         channel: resolvedChannel,
         sender: resolvedSender,
         senderId: senderId || undefined,
@@ -30,6 +30,10 @@ app.post('/api/message', async (c) => {
         agent: agent || undefined,
         files: files && files.length > 0 ? files : undefined,
     });
+
+    if (rowId === null) {
+        return c.json({ error: 'duplicate messageId', messageId }, 409);
+    }
 
     log('INFO', `[API] Message enqueued: ${message.substring(0, 60)}...`);
     emitEvent('message_enqueued', {

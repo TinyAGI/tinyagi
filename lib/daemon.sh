@@ -18,8 +18,15 @@ start_daemon() {
         PUPPETEER_SKIP_DOWNLOAD=true npm install
     fi
 
-    # Build TypeScript if core package isn't built
-    if [ ! -d "$SCRIPT_DIR/packages/core/dist" ]; then
+    # Build TypeScript if any package isn't built
+    local needs_build=false
+    for pkg in core teams server channels main; do
+        if [ ! -d "$SCRIPT_DIR/packages/$pkg/dist" ]; then
+            needs_build=true
+            break
+        fi
+    done
+    if [ "$needs_build" = true ]; then
         echo -e "${YELLOW}Building TypeScript...${NC}"
         cd "$SCRIPT_DIR"
         npm run build
@@ -155,7 +162,7 @@ start_daemon() {
     done
 
     # Queue pane
-    tmux send-keys -t "$TMUX_SESSION:${win_base}.$pane_idx" "cd '$SCRIPT_DIR' && node packages/core/dist/index.js" C-m
+    tmux send-keys -t "$TMUX_SESSION:${win_base}.$pane_idx" "cd '$SCRIPT_DIR' && node packages/main/dist/index.js" C-m
     tmux select-pane -t "$TMUX_SESSION:${win_base}.$pane_idx" -T "Queue"
     pane_idx=$((pane_idx + 1))
 

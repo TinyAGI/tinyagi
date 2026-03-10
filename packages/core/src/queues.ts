@@ -50,6 +50,12 @@ export function initQueueDb(): void {
         CREATE INDEX IF NOT EXISTS idx_resp_channel ON responses(channel, status);
         CREATE INDEX IF NOT EXISTS idx_chat_team ON chat_messages(team_id, id);
     `);
+
+    // Migrate: add metadata column to responses if missing (for existing databases)
+    const cols = db.prepare("PRAGMA table_info(responses)").all() as { name: string }[];
+    if (!cols.some(c => c.name === 'metadata')) {
+        db.exec('ALTER TABLE responses ADD COLUMN metadata TEXT');
+    }
 }
 
 function getDb(): Database.Database {
@@ -59,16 +65,23 @@ function getDb(): Database.Database {
 
 // ── Messages ────────────────────────────────────────────────────────────────
 
-export function enqueueMessage(data: MessageJobData): number {
+export function enqueueMessage(data: MessageJobData): number | null {
     const now = Date.now();
-    const r = getDb().prepare(
-        `INSERT INTO messages (message_id,channel,sender,sender_id,message,agent,files,conversation_id,from_agent,status,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,'pending',?,?)`
-    ).run(data.messageId, data.channel, data.sender, data.senderId ?? null, data.message,
-        data.agent ?? null, data.files ? JSON.stringify(data.files) : null,
-        data.conversationId ?? null, data.fromAgent ?? null, now, now);
-    queueEvents.emit('message:enqueued', { id: r.lastInsertRowid, agent: data.agent });
-    return r.lastInsertRowid as number;
+    try {
+        const r = getDb().prepare(
+            `INSERT INTO messages (message_id,channel,sender,sender_id,message,agent,files,conversation_id,from_agent,status,created_at,updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?,'pending',?,?)`
+        ).run(data.messageId, data.channel, data.sender, data.senderId ?? null, data.message,
+            data.agent ?? null, data.files ? JSON.stringify(data.files) : null,
+            data.conversationId ?? null, data.fromAgent ?? null, now, now);
+        queueEvents.emit('message:enqueued', { id: r.lastInsertRowid, agent: data.agent });
+        return r.lastInsertRowid as number;
+    } catch (err: any) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            return null; // duplicate messageId — already enqueued
+        }
+        throw err;
+    }
 }
 
 export function getPendingAgents(): string[] {

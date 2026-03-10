@@ -5,6 +5,7 @@
     { "path": "packages/teams" },
     { "path": "packages/channels" },
     { "path": "packages/server" },
+    { "path": "packages/main" },
     { "path": "packages/visualizer" }
   ]
 }
