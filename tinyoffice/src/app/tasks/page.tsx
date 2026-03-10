@@ -80,12 +80,13 @@ export default function TasksPage() {
       );
 
       try {
-        await reorderTasks(colMap);
-        // Trigger agent for each newly in-progress task
+        // Send messages before updating status so tasks only move to
+        // in_progress once the agent has actually been notified.
         for (const task of newlyInProgress) {
           const msg = `@${task.assignee} ${task.title}${task.description ? "\n\n" + task.description : ""}\n\n[task:${task.id}]`;
-          await sendMessage({ message: msg, sender: "Web", channel: "web" }).catch(() => {});
+          await sendMessage({ message: msg, sender: "Web", channel: "web" });
         }
+        await reorderTasks(colMap);
         refresh();
       } catch {
         // Ignore — will refresh on next poll

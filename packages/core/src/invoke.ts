@@ -99,16 +99,12 @@ export async function invokeAgent(
 
         // Build env overrides based on harness
         if (customProvider.harness === 'claude') {
-            envOverrides = {
-                ANTHROPIC_BASE_URL: customProvider.base_url,
-                ANTHROPIC_AUTH_TOKEN: customProvider.api_key,
-                ANTHROPIC_API_KEY: '',
-            };
+            envOverrides.ANTHROPIC_BASE_URL = customProvider.base_url;
+            envOverrides.ANTHROPIC_AUTH_TOKEN = customProvider.api_key;
+            envOverrides.ANTHROPIC_API_KEY = '';
         } else if (customProvider.harness === 'codex') {
-            envOverrides = {
-                OPENAI_API_KEY: customProvider.api_key,
-                OPENAI_BASE_URL: customProvider.base_url,
-            };
+            envOverrides.OPENAI_API_KEY = customProvider.api_key;
+            envOverrides.OPENAI_BASE_URL = customProvider.base_url;
         }
 
         log('INFO', `Using custom provider '${customId}' (harness: ${customProvider.harness}, base_url: ${customProvider.base_url})`);
