@@ -28,14 +28,11 @@ SETTINGS_FILE="$TINYCLAW_HOME/settings.json"
 
 mkdir -p "$LOG_DIR"
 
-# Source library files
+# Source library files (daemon runtime only — user commands are in packages/cli/)
 source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/daemon.sh"
-source "$SCRIPT_DIR/lib/messaging.sh"
-source "$SCRIPT_DIR/lib/agents.sh"
-source "$SCRIPT_DIR/lib/teams.sh"
-source "$SCRIPT_DIR/lib/pairing.sh"
-source "$SCRIPT_DIR/lib/update.sh"
+
+CLI="$SCRIPT_DIR/packages/cli/dist"
 
 # --- Main command dispatch ---
 
@@ -61,7 +58,7 @@ case "${1:-}" in
             echo "Usage: $0 send <message>"
             exit 1
         fi
-        send_message "$2" "cli"
+        node "$CLI/messaging.js" send "$2"
         ;;
     logs)
         logs "$2"
@@ -79,11 +76,11 @@ case "${1:-}" in
             exit 1
         fi
         shift  # remove 'reset'
-        agent_reset_multiple "$@"
+        node "$CLI/agent.js" reset "$@"
         ;;
     channels)
         if [ "$2" = "reset" ] && [ -n "$3" ]; then
-            channels_reset "$3"
+            node "$CLI/messaging.js" channels-reset "$3"
         else
             local_names=$(IFS='|'; echo "${ALL_CHANNELS[*]}")
             echo "Usage: $0 channels reset {$local_names}"
@@ -91,291 +88,57 @@ case "${1:-}" in
         fi
         ;;
     provider)
-        if [ -z "$2" ]; then
-            if [ -f "$SETTINGS_FILE" ]; then
-                CURRENT_PROVIDER=$(jq -r '.models.provider // "anthropic"' "$SETTINGS_FILE" 2>/dev/null)
-                if [ "$CURRENT_PROVIDER" = "openai" ]; then
-                    CURRENT_MODEL=$(jq -r '.models.openai.model // empty' "$SETTINGS_FILE" 2>/dev/null)
-                else
-                    CURRENT_MODEL=$(jq -r '.models.anthropic.model // empty' "$SETTINGS_FILE" 2>/dev/null)
-                fi
-                if [ -n "$CURRENT_MODEL" ]; then
-                    echo -e "${BLUE}Global default: ${GREEN}${CURRENT_PROVIDER}/${CURRENT_MODEL}${NC}"
-                else
-                    echo -e "${BLUE}Global default: ${GREEN}$CURRENT_PROVIDER${NC}"
-                fi
-
-                # Show per-agent breakdown if agents exist
-                AGENT_COUNT=$(jq -r '.agents // {} | length' "$SETTINGS_FILE" 2>/dev/null)
-                if [ "$AGENT_COUNT" -gt 0 ] 2>/dev/null; then
-                    echo ""
-                    echo -e "${BLUE}Per-agent models:${NC}"
-                    jq -r '.agents // {} | to_entries[] | "  @\(.key): \(.value.provider)/\(.value.model)"' "$SETTINGS_FILE" 2>/dev/null | while IFS= read -r line; do
-                        echo -e "  ${GREEN}${line}${NC}"
-                    done
-                fi
-            else
-                echo -e "${RED}No settings file found${NC}"
-                exit 1
-            fi
-        else
-            # Parse optional flags: --model and --auth-token
-            PROVIDER_ARG="$2"
-            PROVIDER_EXTRA_ARG="${3:-}"  # e.g. provider ID for 'remove'
-            MODEL_ARG=""
-            AUTH_TOKEN_ARG=""
-            shift 2  # consume 'provider' and the provider name
-            while [ $# -gt 0 ]; do
-                case "$1" in
-                    --model) MODEL_ARG="$2"; shift 2 ;;
-                    --auth-token) AUTH_TOKEN_ARG="$2"; shift 2 ;;
-                    *) shift ;;
-                esac
-            done
-
-            # Capture old provider before switching (for agent propagation)
-            OLD_PROVIDER=$(jq -r '.models.provider // "anthropic"' "$SETTINGS_FILE" 2>/dev/null)
-
-            case "$PROVIDER_ARG" in
-                list|ls)
-                    custom_provider_list
-                    ;;
-                add)
-                    node "$SCRIPT_DIR/packages/cli/dist/agent.js" provider-add
-                    ;;
-                remove|rm)
-                    if [ -z "$PROVIDER_EXTRA_ARG" ]; then
-                        echo "Usage: $0 provider remove <provider_id>"
-                        exit 1
-                    fi
-                    node "$SCRIPT_DIR/packages/cli/dist/agent.js" provider-remove "$PROVIDER_EXTRA_ARG"
-                    ;;
-                anthropic)
-                    if [ ! -f "$SETTINGS_FILE" ]; then
-                        echo -e "${RED}No settings file found. Run setup first.${NC}"
-                        exit 1
-                    fi
-
-                    # Switch to Anthropic provider
-                    tmp_file="$SETTINGS_FILE.tmp"
-                    if [ -n "$MODEL_ARG" ]; then
-                        # Count agents to update before mutation
-                        UPDATED_COUNT=$(jq --arg old_provider "$OLD_PROVIDER" '[.agents // {} | to_entries[] | select(.value.provider == $old_provider)] | length' "$SETTINGS_FILE" 2>/dev/null)
-                        # Set global default and propagate to agents matching old provider
-                        jq --arg model "$MODEL_ARG" --arg old_provider "$OLD_PROVIDER" '
-                            .models.provider = "anthropic" |
-                            .models.anthropic.model = $model |
-                            .agents //= {} |
-                            .agents |= with_entries(
-                                if .value.provider == $old_provider then .value.provider = "anthropic" | .value.model = $model else . end
-                            )
-                        ' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
-                        echo -e "${GREEN}✓ Switched to Anthropic provider with model: $MODEL_ARG${NC}"
-                        if [ "$UPDATED_COUNT" -gt 0 ] 2>/dev/null; then
-                            echo -e "${BLUE}  Updated $UPDATED_COUNT agent(s) from $OLD_PROVIDER to anthropic/$MODEL_ARG${NC}"
-                        fi
-                    else
-                        # Set provider only (no agent propagation)
-                        jq '.models.provider = "anthropic"' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
-                        echo -e "${GREEN}✓ Switched to Anthropic provider${NC}"
-                        echo ""
-                        echo "Use 'tinyclaw model {sonnet|opus}' to set the model."
-                    fi
-
-                    # Store auth token if provided
-                    if [ -n "$AUTH_TOKEN_ARG" ]; then
-                        tmp_file="$SETTINGS_FILE.tmp"
-                        jq --arg token "$AUTH_TOKEN_ARG" '.models.anthropic.auth_token = $token' \
-                            "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
-                        echo -e "${GREEN}✓ Anthropic auth token saved${NC}"
-                    fi
-                    ;;
-                openai)
-                    if [ ! -f "$SETTINGS_FILE" ]; then
-                        echo -e "${RED}No settings file found. Run setup first.${NC}"
-                        exit 1
-                    fi
-
-                    # Switch to OpenAI provider (using Codex CLI)
-                    tmp_file="$SETTINGS_FILE.tmp"
-                    if [ -n "$MODEL_ARG" ]; then
-                        # Count agents to update before mutation
-                        UPDATED_COUNT=$(jq --arg old_provider "$OLD_PROVIDER" '[.agents // {} | to_entries[] | select(.value.provider == $old_provider)] | length' "$SETTINGS_FILE" 2>/dev/null)
-                        # Set global default and propagate to agents matching old provider
-                        jq --arg model "$MODEL_ARG" --arg old_provider "$OLD_PROVIDER" '
-                            .models.provider = "openai" |
-                            .models.openai.model = $model |
-                            .agents //= {} |
-                            .agents |= with_entries(
-                                if .value.provider == $old_provider then .value.provider = "openai" | .value.model = $model else . end
-                            )
-                        ' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
-                        echo -e "${GREEN}✓ Switched to OpenAI/Codex provider with model: $MODEL_ARG${NC}"
-                        if [ "$UPDATED_COUNT" -gt 0 ] 2>/dev/null; then
-                            echo -e "${BLUE}  Updated $UPDATED_COUNT agent(s) from $OLD_PROVIDER to openai/$MODEL_ARG${NC}"
-                        fi
-                        echo ""
-                        echo "Note: Make sure you have the 'codex' CLI installed."
-                    else
-                        # Set provider only (no agent propagation)
-                        jq '.models.provider = "openai"' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
-                        echo -e "${GREEN}✓ Switched to OpenAI/Codex provider${NC}"
-                        echo ""
-                        echo "Use 'tinyclaw model {gpt-5.3-codex|gpt-5.2}' to set the model."
-                        echo "Note: Make sure you have the 'codex' CLI installed."
-                    fi
-
-                    # Store auth token if provided
-                    if [ -n "$AUTH_TOKEN_ARG" ]; then
-                        tmp_file="$SETTINGS_FILE.tmp"
-                        jq --arg token "$AUTH_TOKEN_ARG" '.models.openai.auth_token = $token' \
-                            "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
-                        echo -e "${GREEN}✓ OpenAI auth token saved${NC}"
-                    fi
-                    ;;
-                *)
-                    echo "Usage: $0 provider {anthropic|openai|list|add|remove} [--model MODEL] [--auth-token TOKEN]"
-                    echo ""
-                    echo "Global provider:"
-                    echo "  $0 provider                                    # Show current provider and model"
-                    echo "  $0 provider anthropic                          # Switch to Anthropic"
-                    echo "  $0 provider openai                             # Switch to OpenAI"
-                    echo "  $0 provider anthropic --model sonnet           # Switch to Anthropic with Sonnet"
-                    echo "  $0 provider openai --model gpt-5.3-codex       # Switch to OpenAI with GPT-5.3 Codex"
-                    echo ""
-                    echo "Auth tokens (skip CLI login):"
-                    echo "  $0 provider anthropic --auth-token sk-ant-...  # Set Anthropic API key"
-                    echo "  $0 provider openai --auth-token sk-...         # Set OpenAI API key"
-                    echo ""
-                    echo "Custom providers:"
-                    echo "  $0 provider list                               # List custom providers"
-                    echo "  $0 provider add                                # Add a custom provider"
-                    echo "  $0 provider remove <id>                        # Remove a custom provider"
+        case "${2:-}" in
+            list|ls)
+                node "$CLI/agent.js" provider-list
+                ;;
+            add)
+                node "$CLI/agent.js" provider-add
+                ;;
+            remove|rm)
+                if [ -z "$3" ]; then
+                    echo "Usage: $0 provider remove <provider_id>"
                     exit 1
-                    ;;
-            esac
-        fi
+                fi
+                node "$CLI/agent.js" provider-remove "$3"
+                ;;
+            anthropic|openai)
+                shift  # remove 'provider'
+                node "$CLI/provider.js" "$@"
+                ;;
+            "")
+                node "$CLI/provider.js" show
+                ;;
+            *)
+                echo "Usage: $0 provider {anthropic|openai|list|add|remove} [--model MODEL] [--auth-token TOKEN]"
+                exit 1
+                ;;
+        esac
         ;;
     model)
-        if [ -z "$2" ]; then
-            if [ -f "$SETTINGS_FILE" ]; then
-                CURRENT_PROVIDER=$(jq -r '.models.provider // "anthropic"' "$SETTINGS_FILE" 2>/dev/null)
-                if [ "$CURRENT_PROVIDER" = "openai" ]; then
-                    CURRENT_MODEL=$(jq -r '.models.openai.model // empty' "$SETTINGS_FILE" 2>/dev/null)
-                else
-                    CURRENT_MODEL=$(jq -r '.models.anthropic.model // empty' "$SETTINGS_FILE" 2>/dev/null)
-                fi
-                if [ -n "$CURRENT_MODEL" ]; then
-                    echo -e "${BLUE}Global default: ${GREEN}${CURRENT_PROVIDER}/${CURRENT_MODEL}${NC}"
-                else
-                    echo -e "${RED}No model configured${NC}"
-                    exit 1
-                fi
-
-                # Show per-agent breakdown if agents exist
-                AGENT_COUNT=$(jq -r '.agents // {} | length' "$SETTINGS_FILE" 2>/dev/null)
-                if [ "$AGENT_COUNT" -gt 0 ] 2>/dev/null; then
-                    echo ""
-                    echo -e "${BLUE}Per-agent models:${NC}"
-                    jq -r '.agents // {} | to_entries[] | "  @\(.key): \(.value.provider)/\(.value.model)"' "$SETTINGS_FILE" 2>/dev/null | while IFS= read -r line; do
-                        echo -e "  ${GREEN}${line}${NC}"
-                    done
-                fi
-            else
-                echo -e "${RED}No settings file found${NC}"
-                exit 1
-            fi
-        else
-            case "$2" in
-                sonnet|opus)
-                    if [ ! -f "$SETTINGS_FILE" ]; then
-                        echo -e "${RED}No settings file found. Run setup first.${NC}"
-                        exit 1
-                    fi
-
-                    # Update global default and propagate to all anthropic agents
-                    tmp_file="$SETTINGS_FILE.tmp"
-                    jq --arg model "$2" '
-                        .models.anthropic.model = $model |
-                        .agents //= {} |
-                        .agents |= with_entries(
-                            if .value.provider == "anthropic" then .value.model = $model else . end
-                        )
-                    ' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
-
-                    UPDATED_COUNT=$(jq --arg model "$2" '[.agents // {} | to_entries[] | select(.value.provider == "anthropic")] | length' "$SETTINGS_FILE" 2>/dev/null)
-                    echo -e "${GREEN}✓ Model switched to: $2${NC}"
-                    if [ "$UPDATED_COUNT" -gt 0 ] 2>/dev/null; then
-                        echo -e "${BLUE}  Updated $UPDATED_COUNT anthropic agent(s)${NC}"
-                    fi
-                    echo ""
-                    echo "Note: Changes take effect on next message."
-                    ;;
-                gpt-5.2|gpt-5.3-codex)
-                    if [ ! -f "$SETTINGS_FILE" ]; then
-                        echo -e "${RED}No settings file found. Run setup first.${NC}"
-                        exit 1
-                    fi
-
-                    # Update global default and propagate to all openai agents
-                    tmp_file="$SETTINGS_FILE.tmp"
-                    jq --arg model "$2" '
-                        .models.openai.model = $model |
-                        .agents //= {} |
-                        .agents |= with_entries(
-                            if .value.provider == "openai" then .value.model = $model else . end
-                        )
-                    ' "$SETTINGS_FILE" > "$tmp_file" && mv "$tmp_file" "$SETTINGS_FILE"
-
-                    UPDATED_COUNT=$(jq --arg model "$2" '[.agents // {} | to_entries[] | select(.value.provider == "openai")] | length' "$SETTINGS_FILE" 2>/dev/null)
-                    echo -e "${GREEN}✓ Model switched to: $2${NC}"
-                    if [ "$UPDATED_COUNT" -gt 0 ] 2>/dev/null; then
-                        echo -e "${BLUE}  Updated $UPDATED_COUNT openai agent(s)${NC}"
-                    fi
-                    echo ""
-                    echo "Note: Changes take effect on next message."
-                    ;;
-                *)
-                    echo "Usage: $0 model {sonnet|opus|gpt-5.2|gpt-5.3-codex}"
-                    echo ""
-                    echo "Anthropic models:"
-                    echo "  sonnet            # Claude Sonnet (fast)"
-                    echo "  opus              # Claude Opus (smartest)"
-                    echo ""
-                    echo "OpenAI models:"
-                    echo "  gpt-5.3-codex     # GPT-5.3 Codex"
-                    echo "  gpt-5.2           # GPT-5.2"
-                    echo ""
-                    echo "Examples:"
-                    echo "  $0 model                # Show current model"
-                    echo "  $0 model sonnet         # Switch to Claude Sonnet"
-                    echo "  $0 model gpt-5.3-codex  # Switch to GPT-5.3 Codex"
-                    exit 1
-                    ;;
-            esac
-        fi
+        node "$CLI/provider.js" model "${2:-}"
         ;;
     agent)
         case "${2:-}" in
-            list|ls)
-                agent_list
-                ;;
             add)
-                node "$SCRIPT_DIR/packages/cli/dist/agent.js" add
+                node "$CLI/agent.js" add
                 ;;
             remove|rm)
                 if [ -z "$3" ]; then
                     echo "Usage: $0 agent remove <agent_id>"
                     exit 1
                 fi
-                node "$SCRIPT_DIR/packages/cli/dist/agent.js" remove "$3"
+                node "$CLI/agent.js" remove "$3"
+                ;;
+            list|ls)
+                node "$CLI/agent.js" list
                 ;;
             show)
                 if [ -z "$3" ]; then
                     echo "Usage: $0 agent show <agent_id>"
                     exit 1
                 fi
-                agent_show "$3"
+                node "$CLI/agent.js" show "$3"
                 ;;
             reset)
                 if [ -z "$3" ]; then
@@ -383,21 +146,14 @@ case "${1:-}" in
                     exit 1
                 fi
                 shift 2  # remove 'agent' and 'reset'
-                agent_reset_multiple "$@"
+                node "$CLI/agent.js" reset "$@"
                 ;;
             provider)
                 if [ -z "$3" ]; then
                     echo "Usage: $0 agent provider <agent_id> [provider] [--model MODEL_NAME]"
-                    echo ""
-                    echo "Examples:"
-                    echo "  $0 agent provider coder                                    # Show current provider/model"
-                    echo "  $0 agent provider coder anthropic                           # Switch to Anthropic"
-                    echo "  $0 agent provider coder openai                              # Switch to OpenAI"
-                    echo "  $0 agent provider coder anthropic --model opus              # Switch to Anthropic Opus"
-                    echo "  $0 agent provider coder openai --model gpt-5.3-codex        # Switch to OpenAI GPT-5.3 Codex"
                     exit 1
                 fi
-                agent_provider "$3" "$4" "$5" "$6"
+                node "$CLI/agent.js" provider "$3" "$4" "$5" "$6"
                 ;;
             *)
                 echo "Usage: $0 agent {list|add|remove|show|reset|provider}"
@@ -410,15 +166,6 @@ case "${1:-}" in
                 echo "  reset <id> [id2 ...]   Reset agent conversation(s)"
                 echo "  provider <id> [...]    Show or set agent's provider and model"
                 echo ""
-                echo "Examples:"
-                echo "  $0 agent list"
-                echo "  $0 agent add"
-                echo "  $0 agent show coder"
-                echo "  $0 agent remove coder"
-                echo "  $0 agent reset coder"
-                echo "  $0 agent reset coder researcher"
-                echo "  $0 agent provider coder anthropic --model opus"
-                echo ""
                 echo "In chat, use '@agent_id message' to route to a specific agent."
                 exit 1
                 ;;
@@ -426,54 +173,54 @@ case "${1:-}" in
         ;;
     team)
         case "${2:-}" in
-            list|ls)
-                team_list
-                ;;
             add)
-                node "$SCRIPT_DIR/packages/cli/dist/team.js" add
+                node "$CLI/team.js" add
                 ;;
             remove|rm)
                 if [ -z "$3" ]; then
                     echo "Usage: $0 team remove <team_id>"
                     exit 1
                 fi
-                node "$SCRIPT_DIR/packages/cli/dist/team.js" remove "$3"
+                node "$CLI/team.js" remove "$3"
+                ;;
+            list|ls)
+                node "$CLI/team.js" list
                 ;;
             show)
                 if [ -z "$3" ]; then
                     echo "Usage: $0 team show <team_id>"
                     exit 1
                 fi
-                team_show "$3"
+                node "$CLI/team.js" show "$3"
                 ;;
             add-agent|agent-add|member-add)
                 if [ -z "$3" ] || [ -z "$4" ]; then
                     echo "Usage: $0 team add-agent <team_id> <agent_id>"
                     exit 1
                 fi
-                team_add_agent "$3" "$4"
+                node "$CLI/team.js" add-agent "$3" "$4"
                 ;;
             remove-agent|agent-remove|member-remove)
                 if [ -z "$3" ] || [ -z "$4" ]; then
                     echo "Usage: $0 team remove-agent <team_id> <agent_id>"
                     exit 1
                 fi
-                node "$SCRIPT_DIR/packages/cli/dist/team.js" remove-agent "$3" "$4"
+                node "$CLI/team.js" remove-agent "$3" "$4"
                 ;;
             visualize|viz)
                 # Build visualizer if needed
-                if [ ! -f "$SCRIPT_DIR/dist/visualizer/team-visualizer.js" ] || \
-                   [ "$SCRIPT_DIR/src/visualizer/team-visualizer.tsx" -nt "$SCRIPT_DIR/dist/visualizer/team-visualizer.js" ]; then
+                if [ ! -f "$SCRIPT_DIR/packages/visualizer/dist/team-visualizer.js" ] || \
+                   [ "$SCRIPT_DIR/packages/visualizer/src/team-visualizer.tsx" -nt "$SCRIPT_DIR/packages/visualizer/dist/team-visualizer.js" ]; then
                     echo -e "${BLUE}Building team visualizer...${NC}"
-                    if ! (cd "$SCRIPT_DIR" && npm run build:visualizer 2>/dev/null); then
+                    if ! (cd "$SCRIPT_DIR" && npm run build -w @tinyclaw/visualizer 2>/dev/null); then
                         echo -e "${RED}Failed to build visualizer.${NC}"
                         exit 1
                     fi
                 fi
                 if [ -n "$3" ]; then
-                    node "$SCRIPT_DIR/dist/visualizer/team-visualizer.js" --team "$3"
+                    node "$SCRIPT_DIR/packages/visualizer/dist/team-visualizer.js" --team "$3"
                 else
-                    node "$SCRIPT_DIR/dist/visualizer/team-visualizer.js"
+                    node "$SCRIPT_DIR/packages/visualizer/dist/team-visualizer.js"
                 fi
                 ;;
             *)
@@ -488,18 +235,7 @@ case "${1:-}" in
                 echo "  remove-agent <tid> <aid> Remove an agent from a team"
                 echo "  visualize [team_id]    Live TUI dashboard for team collaboration"
                 echo ""
-                echo "Examples:"
-                echo "  $0 team list"
-                echo "  $0 team add"
-                echo "  $0 team show dev"
-                echo "  $0 team remove dev"
-                echo "  $0 team add-agent dev reviewer"
-                echo "  $0 team remove-agent dev reviewer"
-                echo "  $0 team visualize"
-                echo "  $0 team visualize dev"
-                echo ""
                 echo "In chat, use '@team_id message' to route to a team's leader agent."
-                echo "Agents can collaborate by mentioning @teammate in responses."
                 exit 1
                 ;;
         esac
@@ -511,27 +247,27 @@ case "${1:-}" in
             exit 1
         fi
         # Build if needed
-        if [ ! -f "$SCRIPT_DIR/dist/visualizer/chatroom-viewer.js" ] || \
-           [ "$SCRIPT_DIR/src/visualizer/chatroom-viewer.tsx" -nt "$SCRIPT_DIR/dist/visualizer/chatroom-viewer.js" ]; then
+        if [ ! -f "$SCRIPT_DIR/packages/visualizer/dist/chatroom-viewer.js" ] || \
+           [ "$SCRIPT_DIR/packages/visualizer/src/chatroom-viewer.tsx" -nt "$SCRIPT_DIR/packages/visualizer/dist/chatroom-viewer.js" ]; then
             echo -e "${BLUE}Building chatroom viewer...${NC}"
-            if ! (cd "$SCRIPT_DIR" && npm run build:visualizer 2>/dev/null); then
+            if ! (cd "$SCRIPT_DIR" && npm run build -w @tinyclaw/visualizer 2>/dev/null); then
                 echo -e "${RED}Failed to build chatroom viewer.${NC}"
                 exit 1
             fi
         fi
-        node "$SCRIPT_DIR/dist/visualizer/chatroom-viewer.js" --team "$CHATROOM_TEAM"
+        node "$SCRIPT_DIR/packages/visualizer/dist/chatroom-viewer.js" --team "$CHATROOM_TEAM"
         ;;
     pairing)
-        pairing_command "${2:-}" "${3:-}"
+        node "$CLI/pairing.js" "${2:-}" "${3:-}" "${4:-}"
         ;;
     attach)
         tmux attach -t "$TMUX_SESSION"
         ;;
     setup)
-        node "$SCRIPT_DIR/packages/cli/dist/setup-wizard.js"
+        node "$CLI/setup-wizard.js"
         ;;
     update)
-        node "$SCRIPT_DIR/packages/cli/dist/update.js"
+        node "$CLI/update.js"
         ;;
     *)
         local_names=$(IFS='|'; echo "${ALL_CHANNELS[*]}")

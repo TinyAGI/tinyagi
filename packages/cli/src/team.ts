@@ -166,6 +166,80 @@ async function teamRemoveAgent(teamId: string, agentId: string) {
     p.log.success(`Removed @${agentId} from team '${teamId}'.${newLeader !== team.leader_agent ? ` New leader: @${newLeader}.` : ''}`);
 }
 
+// --- team list ---
+
+function teamList() {
+    const settings = requireSettings();
+    const teams = settings.teams || {};
+    const ids = Object.keys(teams);
+
+    if (ids.length === 0) {
+        p.log.warn('No teams configured.');
+        p.log.message('Add a team with: tinyclaw team add');
+        return;
+    }
+
+    p.log.info('Configured Teams');
+    for (const id of ids) {
+        const t = teams[id];
+        p.log.message(`  @${id} - ${t.name}`);
+        p.log.message(`    Agents:  ${t.agents.join(', ')}`);
+        p.log.message(`    Leader:  @${t.leader_agent}`);
+        p.log.message('');
+    }
+    p.log.message("Usage: Send '@team_id <message>' in any channel to route to a team.");
+}
+
+// --- team show ---
+
+function teamShow(teamId: string) {
+    const settings = requireSettings();
+    const team = settings.teams?.[teamId];
+
+    if (!team) {
+        p.log.error(`Team '${teamId}' not found.`);
+        const ids = Object.keys(settings.teams || {});
+        if (ids.length > 0) {
+            p.log.message('Available teams:');
+            for (const id of ids) p.log.message(`  @${id}`);
+        }
+        process.exit(1);
+    }
+
+    p.log.info(`Team: @${teamId}`);
+    console.log(JSON.stringify(team, null, 2));
+}
+
+// --- team add-agent ---
+
+function teamAddAgent(teamId: string, agentId: string) {
+    const settings = requireSettings();
+    const team = settings.teams?.[teamId];
+
+    if (!team) {
+        p.log.error(`Team '${teamId}' not found.`);
+        process.exit(1);
+    }
+
+    const agent = settings.agents?.[agentId];
+    if (!agent) {
+        p.log.error(`Agent '${agentId}' not found.`);
+        process.exit(1);
+    }
+
+    if (team.agents.includes(agentId)) {
+        p.log.warn(`Agent '${agentId}' is already in team '${teamId}'.`);
+        return;
+    }
+
+    team.agents.push(agentId);
+    writeSettings(settings);
+
+    refreshTeamInfo(settings);
+
+    p.log.success(`Added @${agentId} to team '${teamId}' (${team.name}).`);
+}
+
 // --- CLI dispatch ---
 
 const command = process.argv[2];
@@ -191,6 +265,26 @@ async function run() {
                 process.exit(1);
             }
             await teamRemoveAgent(arg1, arg2);
+            break;
+        case 'list':
+        case 'ls':
+            teamList();
+            break;
+        case 'show':
+            if (!arg1) {
+                p.log.error('Usage: team show <team_id>');
+                process.exit(1);
+            }
+            teamShow(arg1);
+            break;
+        case 'add-agent':
+        case 'agent-add':
+        case 'member-add':
+            if (!arg1 || !arg2) {
+                p.log.error('Usage: team add-agent <team_id> <agent_id>');
+                process.exit(1);
+            }
+            teamAddAgent(arg1, arg2);
             break;
         default:
             p.log.error(`Unknown team CLI command: ${command}`);

@@ -248,6 +248,157 @@ async function customProviderRemove(providerId: string) {
     p.log.success(`Custom provider '${providerId}' removed.`);
 }
 
+// --- agent list ---
+
+function agentList() {
+    const settings = requireSettings();
+    const agents = settings.agents || {};
+    const ids = Object.keys(agents);
+
+    if (ids.length === 0) {
+        p.log.warn('No agents configured.');
+        p.log.message('Using default single-agent mode (from models section).');
+        p.log.message('Add an agent with: tinyclaw agent add');
+        return;
+    }
+
+    p.log.info('Configured Agents');
+    for (const id of ids) {
+        const a = agents[id];
+        p.log.message(`  @${id} - ${a.name}`);
+        p.log.message(`    Provider:  ${a.provider}/${a.model}`);
+        p.log.message(`    Directory: ${a.working_directory}`);
+        p.log.message('');
+    }
+    p.log.message("Usage: Send '@agent_id <message>' in any channel to route to a specific agent.");
+}
+
+// --- agent show ---
+
+function agentShow(agentId: string) {
+    const settings = requireSettings();
+    const agent = settings.agents?.[agentId];
+
+    if (!agent) {
+        p.log.error(`Agent '${agentId}' not found.`);
+        const ids = Object.keys(settings.agents || {});
+        if (ids.length > 0) {
+            p.log.message('Available agents:');
+            for (const id of ids) p.log.message(`  @${id}`);
+        }
+        process.exit(1);
+    }
+
+    p.log.info(`Agent: @${agentId}`);
+    console.log(JSON.stringify(agent, null, 2));
+}
+
+// --- agent provider (show/set) ---
+
+function agentProvider(agentId: string, providerArg?: string, flag?: string, modelArg?: string) {
+    const settings = requireSettings();
+    const agent = settings.agents?.[agentId];
+
+    if (!agent) {
+        p.log.error(`Agent '${agentId}' not found.`);
+        const ids = Object.keys(settings.agents || {});
+        if (ids.length > 0) {
+            p.log.message('Available agents:');
+            for (const id of ids) p.log.message(`  @${id}`);
+        }
+        process.exit(1);
+    }
+
+    // Show current provider if no args
+    if (!providerArg) {
+        p.log.info(`Agent: @${agentId} (${agent.name})`);
+        p.log.message(`Provider: ${agent.provider}`);
+        if (agent.model) p.log.message(`Model:    ${agent.model}`);
+        return;
+    }
+
+    const model = (flag === '--model' && modelArg) ? modelArg : undefined;
+
+    switch (providerArg) {
+        case 'anthropic':
+        case 'openai':
+        case 'opencode':
+            agent.provider = providerArg;
+            if (model) agent.model = model;
+            break;
+        default:
+            if (providerArg.startsWith('custom:')) {
+                agent.provider = providerArg;
+                if (model) agent.model = model;
+            } else {
+                p.log.error('Usage: tinyclaw agent provider <agent_id> {anthropic|openai|opencode|custom:<id>} [--model MODEL]');
+                process.exit(1);
+            }
+    }
+
+    writeSettings(settings);
+    p.log.success(`Agent '${agentId}' switched to ${agent.provider}${model ? ` with model: ${model}` : ''}`);
+    p.log.message('Note: Changes take effect on next message. Restart is not required.');
+}
+
+// --- agent reset ---
+
+function agentReset(agentIds: string[]) {
+    const settings = requireSettings();
+    const workspacePath = settings.workspace?.path || '';
+    let resetCount = 0;
+
+    for (const agentId of agentIds) {
+        const agent = settings.agents?.[agentId];
+        if (!agent) {
+            p.log.error(`Agent '${agentId}' not found.`);
+            const ids = Object.keys(settings.agents || {});
+            if (ids.length > 0) {
+                p.log.message('Available agents:');
+                for (const id of ids) p.log.message(`  @${id}`);
+            }
+            continue;
+        }
+
+        const agentDir = path.join(workspacePath, agentId);
+        fs.mkdirSync(agentDir, { recursive: true });
+        fs.writeFileSync(path.join(agentDir, 'reset_flag'), '');
+        p.log.success(`Reset flag set for agent '${agentId}' (${agent.name})`);
+        p.log.message(`  The next message to @${agentId} will start a fresh conversation.`);
+        resetCount++;
+    }
+
+    if (resetCount > 0) {
+        p.log.message(`\nReset ${resetCount} agent(s).`);
+    }
+}
+
+// --- custom provider list ---
+
+function customProviderList() {
+    const settings = requireSettings();
+    const providers = settings.custom_providers || {};
+    const ids = Object.keys(providers);
+
+    if (ids.length === 0) {
+        p.log.warn('No custom providers configured.');
+        p.log.message('Add one with: tinyclaw provider add');
+        return;
+    }
+
+    p.log.info('Custom Providers');
+    for (const id of ids) {
+        const prov = providers[id];
+        p.log.message(`  ${id} - ${prov.name}`);
+        p.log.message(`    Harness:  ${prov.harness}`);
+        p.log.message(`    Base URL: ${prov.base_url}`);
+        p.log.message(`    Model:    ${prov.model || 'default'}`);
+        p.log.message('');
+    }
+    p.log.message('Usage: Set an agent to use a custom provider with:');
+    p.log.message('  tinyclaw agent provider <agent_id> custom:<provider_id>');
+}
+
 // --- CLI dispatch ---
 
 const command = process.argv[2];
@@ -266,6 +417,31 @@ async function run() {
             }
             await agentRemove(arg);
             break;
+        case 'list':
+        case 'ls':
+            agentList();
+            break;
+        case 'show':
+            if (!arg) {
+                p.log.error('Usage: agent show <agent_id>');
+                process.exit(1);
+            }
+            agentShow(arg);
+            break;
+        case 'provider':
+            if (!arg) {
+                p.log.error('Usage: agent provider <agent_id> [provider] [--model MODEL]');
+                process.exit(1);
+            }
+            agentProvider(arg, process.argv[4], process.argv[5], process.argv[6]);
+            break;
+        case 'reset':
+            if (!arg) {
+                p.log.error('Usage: agent reset <agent_id> [agent_id2 ...]');
+                process.exit(1);
+            }
+            agentReset(process.argv.slice(3));
+            break;
         case 'provider-add':
             await customProviderAdd();
             break;
@@ -276,6 +452,10 @@ async function run() {
                 process.exit(1);
             }
             await customProviderRemove(arg);
+            break;
+        case 'provider-list':
+        case 'provider-ls':
+            customProviderList();
             break;
         default:
             p.log.error(`Unknown agent CLI command: ${command}`);

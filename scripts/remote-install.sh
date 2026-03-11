@@ -182,7 +182,6 @@ chmod +x scripts/install.sh
 chmod +x scripts/uninstall.sh
 chmod +x lib/setup-wizard.sh
 chmod +x lib/heartbeat-cron.sh
-chmod +x lib/update.sh
 
 # Run the install script (creates symlink and configures PATH)
 "$INSTALL_DIR/scripts/install.sh" || true
