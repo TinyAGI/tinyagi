@@ -31,6 +31,7 @@ mkdir -p "$LOG_DIR"
 # Source library files (daemon runtime only — user commands are in packages/cli/)
 source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/daemon.sh"
+source "$SCRIPT_DIR/lib/update.sh"
 
 CLI="$SCRIPT_DIR/packages/cli/dist"
 
@@ -269,11 +270,14 @@ case "${1:-}" in
     update)
         node "$CLI/update.js"
         ;;
+    version|--version|-v|-V)
+        echo "tinyclaw v$(get_current_version)"
+        ;;
     *)
         local_names=$(IFS='|'; echo "${ALL_CHANNELS[*]}")
         echo -e "${BLUE}TinyClaw - Claude Code + Messaging Channels${NC}"
         echo ""
-        echo "Usage: $0 {start|stop|restart|status|setup|send|logs|reset <agent_id>|channels|provider|model|agent|team|chatroom|pairing|update|attach}"
+        echo "Usage: $0 {start|stop|restart|status|setup|send|logs|reset <agent_id>|channels|provider|model|agent|team|chatroom|pairing|update|version|attach}"
         echo ""
         echo "Commands:"
         echo "  start                    Start TinyClaw"
@@ -293,6 +297,7 @@ case "${1:-}" in
         echo "  chatroom <team_id>       Live chat room viewer for a team"
         echo "  pairing {pending|approved|list|approve <code>|unpair <channel> <sender_id>}  Manage sender approvals"
         echo "  update                   Update TinyClaw to latest version"
+        echo "  version                  Show current version"
         echo "  attach                   Attach to tmux session"
         echo ""
         echo "Examples:"
