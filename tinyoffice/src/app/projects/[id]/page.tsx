@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { use, useState, useCallback, useMemo } from "react";
+import Link from "next/link";
 import type { UniqueIdentifier } from "@dnd-kit/core";
 import { usePolling } from "@/lib/hooks";
 import {
@@ -18,8 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
-  ClipboardList, Plus, GripVertical, Bot, Users, X, Check, Loader2,
-  Trash2, Send, Clock, FolderKanban,
+  FolderKanban, Plus, GripVertical, Bot, Users, X, Check, Loader2,
+  Trash2, Send, Clock, ArrowLeft,
 } from "lucide-react";
 
 const COLUMNS: { id: TaskStatus; label: string; color: string }[] = [
@@ -34,67 +35,67 @@ interface TaskForm {
   description: string;
   assignee: string;
   assigneeType: "agent" | "team" | "";
-  projectId: string;
 }
 
-const emptyForm: TaskForm = { title: "", description: "", assignee: "", assigneeType: "", projectId: "" };
+const emptyForm: TaskForm = { title: "", description: "", assignee: "", assigneeType: "" };
 
-export default function TasksPage() {
-  const { data: tasks, refresh } = usePolling<Task[]>(getTasks, 3000);
+export default function ProjectDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id: projectId } = use(params);
+  const { data: allTasks, refresh: refreshTasks } = usePolling<Task[]>(getTasks, 3000);
   const { data: agents } = usePolling<Record<string, AgentConfig>>(getAgents, 5000);
   const { data: teams } = usePolling<Record<string, TeamConfig>>(getTeams, 5000);
   const { data: projects } = usePolling<Project[]>(getProjects, 5000);
+
+  const project = projects?.find((p) => p.id === projectId);
+  const tasks = useMemo(
+    () => (allTasks || []).filter((t) => t.projectId === projectId),
+    [allTasks, projectId]
+  );
 
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<TaskForm>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Build kanban value: columns → task items
   const columns = useMemo(() => {
     const cols: Record<UniqueIdentifier, Task[]> = {
-      backlog: [],
-      in_progress: [],
-      review: [],
-      done: [],
+      backlog: [], in_progress: [], review: [], done: [],
     };
-    if (tasks) {
-      for (const task of tasks) {
-        const col = cols[task.status];
-        if (col) col.push(task);
-      }
+    for (const task of tasks) {
+      const col = cols[task.status];
+      if (col) col.push(task);
     }
     return cols;
   }, [tasks]);
 
   const handleValueChange = useCallback(
     async (newColumns: Record<UniqueIdentifier, Task[]>) => {
-      // Build columns map of status → task IDs for bulk reorder
       const colMap: Record<string, string[]> = {};
       for (const [status, items] of Object.entries(newColumns)) {
         colMap[status] = items.map((t) => t.id);
       }
 
-      // Detect tasks newly moved into "in_progress" that have an assignee
       const prevInProgress = new Set((columns.in_progress ?? []).map((t) => t.id));
       const newlyInProgress = (newColumns.in_progress ?? []).filter(
         (t) => !prevInProgress.has(t.id) && t.assignee
       );
 
       try {
-        // Send messages before updating status so tasks only move to
-        // in_progress once the agent has actually been notified.
         for (const task of newlyInProgress) {
           const msg = `@${task.assignee} ${task.title}${task.description ? "\n\n" + task.description : ""}\n\n[task:${task.id}]`;
           await sendMessage({ message: msg, sender: "Web", channel: "web" });
         }
         await reorderTasks(colMap);
-        refresh();
+        refreshTasks();
       } catch {
-        // Ignore — will refresh on next poll
+        // Ignore
       }
     },
-    [refresh, columns]
+    [refreshTasks, columns]
   );
 
   const handleCreate = useCallback(async () => {
@@ -111,44 +112,43 @@ export default function TasksPage() {
         assignee: form.assignee,
         assigneeType: form.assigneeType,
         status: "backlog",
-        ...(form.projectId ? { projectId: form.projectId } : {}),
+        projectId,
       });
       setForm({ ...emptyForm });
       setCreating(false);
-      refresh();
+      refreshTasks();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSaving(false);
     }
-  }, [form, refresh]);
+  }, [form, projectId, refreshTasks]);
 
   const handleDelete = useCallback(
     async (id: string) => {
       try {
         await deleteTask(id);
-        refresh();
+        refreshTasks();
       } catch {
         // Ignore
       }
     },
-    [refresh]
+    [refreshTasks]
   );
 
   const handleAssign = useCallback(
     async (task: Task) => {
       if (!task.assignee) return;
-      const prefix = task.assigneeType === "team" ? "@" : "@";
-      const msg = `${prefix}${task.assignee} ${task.title}${task.description ? "\n\n" + task.description : ""}\n\n[task:${task.id}]`;
+      const msg = `@${task.assignee} ${task.title}${task.description ? "\n\n" + task.description : ""}\n\n[task:${task.id}]`;
       try {
         await sendMessage({ message: msg, sender: "Web", channel: "web" });
         await updateTask(task.id, { status: "in_progress" });
-        refresh();
+        refreshTasks();
       } catch {
         // Ignore
       }
     },
-    [refresh]
+    [refreshTasks]
   );
 
   const setAssignee = (value: string) => {
@@ -168,14 +168,24 @@ export default function TasksPage() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-6 py-4">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-primary" />
-            Tasks
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Assign and track work across agents
-          </p>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/projects"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+              <FolderKanban className="h-5 w-5 text-primary" />
+              {project?.name || "Project"}
+            </h1>
+            {project?.description && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {project.description}
+              </p>
+            )}
+          </div>
         </div>
         <Button onClick={() => setCreating(true)} disabled={creating}>
           <Plus className="h-4 w-4" />
@@ -212,26 +222,13 @@ export default function TasksPage() {
                 ))}
             </Select>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Textarea
-              placeholder="Description (optional)"
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              rows={2}
-              className="text-sm resize-none"
-            />
-            <Select
-              value={form.projectId}
-              onChange={(e) => setForm((f) => ({ ...f, projectId: e.target.value }))}
-            >
-              <option value="">No project</option>
-              {projects?.filter((p) => p.status === "active").map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <Textarea
+            placeholder="Description (optional)"
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            rows={2}
+            className="text-sm resize-none"
+          />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2">
             <Button onClick={handleCreate} disabled={saving}>
@@ -284,7 +281,6 @@ export default function TasksPage() {
                       task={task}
                       agents={agents || {}}
                       teams={teams || {}}
-                      projects={projects || []}
                       onDelete={handleDelete}
                       onAssign={handleAssign}
                     />
@@ -297,14 +293,26 @@ export default function TasksPage() {
           <KanbanOverlay>
             {({ value, variant }) => {
               if (variant === "column") return null;
-              const task = tasks?.find((t) => t.id === value);
+              const task = tasks.find((t) => t.id === value);
               if (!task) return null;
               return (
-                <TaskCardOverlay
-                  task={task}
-                  agents={agents || {}}
-                  teams={teams || {}}
-                />
+                <Card className="border-primary/50 shadow-lg w-[280px]">
+                  <CardContent className="p-3 space-y-1">
+                    <p className="text-sm font-medium">{task.title}</p>
+                    {task.assignee && (
+                      <Badge variant="secondary" className="text-[10px] flex items-center gap-1 w-fit">
+                        {task.assigneeType === "team" ? (
+                          <Users className="h-2.5 w-2.5" />
+                        ) : (
+                          <Bot className="h-2.5 w-2.5" />
+                        )}
+                        {task.assigneeType === "team"
+                          ? (teams || {})[task.assignee]?.name || task.assignee
+                          : (agents || {})[task.assignee]?.name || task.assignee}
+                      </Badge>
+                    )}
+                  </CardContent>
+                </Card>
               );
             }}
           </KanbanOverlay>
@@ -318,18 +326,15 @@ function TaskCard({
   task,
   agents,
   teams,
-  projects,
   onDelete,
   onAssign,
 }: {
   task: Task;
   agents: Record<string, AgentConfig>;
   teams: Record<string, TeamConfig>;
-  projects: Project[];
   onDelete: (id: string) => void;
   onAssign: (task: Task) => void;
 }) {
-  const project = task.projectId ? projects.find((p) => p.id === task.projectId) : null;
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
@@ -351,17 +356,8 @@ function TaskCard({
 
           <div className="flex items-center justify-between pl-5.5">
             <div className="flex items-center gap-1.5">
-              {project && (
-                <Badge variant="outline" className="text-[10px] flex items-center gap-1">
-                  <FolderKanban className="h-2.5 w-2.5" />
-                  {project.name}
-                </Badge>
-              )}
               {task.assignee ? (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] flex items-center gap-1"
-                >
+                <Badge variant="secondary" className="text-[10px] flex items-center gap-1">
                   {task.assigneeType === "team" ? (
                     <Users className="h-2.5 w-2.5" />
                   ) : (
@@ -382,10 +378,7 @@ function TaskCard({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 text-muted-foreground hover:text-primary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAssign(task);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onAssign(task); }}
                   title="Send to agent"
                 >
                   <Send className="h-3 w-3" />
@@ -393,40 +386,18 @@ function TaskCard({
               )}
               {confirmDelete ? (
                 <div className="flex items-center gap-0.5">
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(task.id);
-                      setConfirmDelete(false);
-                    }}
-                  >
+                  <Button variant="destructive" size="icon" className="h-6 w-6"
+                    onClick={(e) => { e.stopPropagation(); onDelete(task.id); setConfirmDelete(false); }}>
                     <Check className="h-3 w-3" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDelete(false);
-                    }}
-                  >
+                  <Button variant="ghost" size="icon" className="h-6 w-6"
+                    onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}>
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
               ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirmDelete(true);
-                  }}
-                >
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}>
                   <Trash2 className="h-3 w-3" />
                 </Button>
               )}
@@ -442,35 +413,5 @@ function TaskCard({
         </CardContent>
       </Card>
     </KanbanItem>
-  );
-}
-
-function TaskCardOverlay({
-  task,
-  agents,
-  teams,
-}: {
-  task: Task;
-  agents: Record<string, AgentConfig>;
-  teams: Record<string, TeamConfig>;
-}) {
-  return (
-    <Card className="border-primary/50 shadow-lg w-[280px]">
-      <CardContent className="p-3 space-y-1">
-        <p className="text-sm font-medium">{task.title}</p>
-        {task.assignee && (
-          <Badge variant="secondary" className="text-[10px] flex items-center gap-1 w-fit">
-            {task.assigneeType === "team" ? (
-              <Users className="h-2.5 w-2.5" />
-            ) : (
-              <Bot className="h-2.5 w-2.5" />
-            )}
-            {task.assigneeType === "team"
-              ? teams[task.assignee]?.name || task.assignee
-              : agents[task.assignee]?.name || task.assignee}
-          </Badge>
-        )}
-      </CardContent>
-    </Card>
   );
 }

@@ -150,6 +150,7 @@ export interface Task {
   status: TaskStatus;
   assignee: string;
   assigneeType: "agent" | "team" | "";
+  projectId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -172,6 +173,99 @@ export async function deleteTask(id: string): Promise<{ ok: boolean }> {
 
 export async function reorderTasks(columns: Record<string, string[]>): Promise<{ ok: boolean }> {
   return apiFetch("/api/tasks/reorder", { method: "PUT", body: JSON.stringify({ columns }) });
+}
+
+// ── Chat Room ────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: number;
+  team_id: string;
+  from_agent: string;
+  message: string;
+  created_at: number;
+}
+
+export async function getChatMessages(
+  teamId: string,
+  limit = 100,
+  sinceId = 0
+): Promise<ChatMessage[]> {
+  return apiFetch(`/api/chatroom/${encodeURIComponent(teamId)}?limit=${limit}&since=${sinceId}`);
+}
+
+export async function postChatMessage(
+  teamId: string,
+  message: string
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/chatroom/${encodeURIComponent(teamId)}`, {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+}
+
+// ── Projects (localStorage) ─────────────────────────────────────────────
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: "active" | "archived";
+  createdAt: number;
+  updatedAt: number;
+}
+
+const PROJECTS_KEY = "tinyclaw_projects";
+
+function readProjects(): Project[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(PROJECTS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeProjects(projects: Project[]): void {
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+}
+
+export async function getProjects(): Promise<Project[]> {
+  return readProjects();
+}
+
+export async function createProject(
+  data: Pick<Project, "name" | "description">
+): Promise<{ ok: boolean; project: Project }> {
+  const projects = readProjects();
+  const project: Project = {
+    id: `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    name: data.name,
+    description: data.description,
+    status: "active",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  projects.push(project);
+  writeProjects(projects);
+  return { ok: true, project };
+}
+
+export async function updateProject(
+  id: string,
+  data: Partial<Omit<Project, "id" | "createdAt">>
+): Promise<{ ok: boolean; project: Project }> {
+  const projects = readProjects();
+  const idx = projects.findIndex((p) => p.id === id);
+  if (idx === -1) throw new Error("Project not found");
+  projects[idx] = { ...projects[idx], ...data, updatedAt: Date.now() };
+  writeProjects(projects);
+  return { ok: true, project: projects[idx] };
+}
+
+export async function deleteProject(id: string): Promise<{ ok: boolean }> {
+  const projects = readProjects();
+  writeProjects(projects.filter((p) => p.id !== id));
+  return { ok: true };
 }
 
 // ── SSE ───────────────────────────────────────────────────────────────────
