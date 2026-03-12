@@ -1,0 +1,4 @@
+#!/bin/bash
+# Backwards-compatibility shim: tinyclaw → tinyagi
+echo "Note: 'tinyclaw' has been renamed to 'tinyagi'. Please use 'tinyagi' instead."
+exec "$(dirname "$0")/tinyagi" "$@"

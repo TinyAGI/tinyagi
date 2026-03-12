@@ -79,6 +79,7 @@ fi
 echo ""
 echo "Creating symlink..."
 ln -s "$WRAPPER" "$INSTALL_DIR/tinyagi"
+ln -sf "$PROJECT_ROOT/bin/tinyclaw" "$INSTALL_DIR/tinyclaw"
 
 echo -e "${GREEN}✓ TinyAGI CLI installed successfully!${NC}"
 echo ""
