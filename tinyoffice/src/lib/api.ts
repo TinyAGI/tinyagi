@@ -90,6 +90,10 @@ export async function updateSettings(settings: Partial<Settings>): Promise<{ ok:
   return apiFetch("/api/settings", { method: "PUT", body: JSON.stringify(settings) });
 }
 
+export async function runSetup(settings: Settings): Promise<{ ok: boolean; settings: Settings }> {
+  return apiFetch("/api/setup", { method: "POST", body: JSON.stringify(settings) });
+}
+
 export async function getQueueStatus(): Promise<QueueStatus> {
   return apiFetch("/api/queue/status");
 }
