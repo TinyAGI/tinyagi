@@ -1,6 +1,7 @@
 {
   "name": "@tinyclaw/cli",
   "version": "0.0.10",
+  "type": "module",
   "main": "dist/shared.js",
   "scripts": {
     "build": "tsc"
