@@ -125,7 +125,7 @@ export function AgentChatView({
     } finally {
       setSending(false);
     }
-  }, [input, sending, agentId, addItems]);
+  }, [input, sending, agentId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
