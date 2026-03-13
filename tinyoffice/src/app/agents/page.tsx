@@ -31,7 +31,7 @@ const emptyForm: FormData = {
 };
 
 export default function AgentsPage() {
-  const { data: agents, loading, refresh } = usePolling<Record<string, AgentConfig>>(getAgents, 5000);
+  const { data: agents, loading, refresh } = usePolling<Record<string, AgentConfig>>(getAgents, 0);
   const [editing, setEditing] = useState<FormData | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);

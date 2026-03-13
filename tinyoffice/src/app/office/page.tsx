@@ -107,8 +107,8 @@ function lerp(a: number, b: number, t: number) {
 }
 
 export default function OfficePage() {
-  const { data: agents } = usePolling<Record<string, AgentConfig>>(getAgents, 5000);
-  const { data: teams } = usePolling<Record<string, TeamConfig>>(getTeams, 5000);
+  const { data: agents } = usePolling<Record<string, AgentConfig>>(getAgents, 0);
+  const { data: teams } = usePolling<Record<string, TeamConfig>>(getTeams, 0);
   const [bubbles, setBubbles] = useState<SpeechBubble[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);

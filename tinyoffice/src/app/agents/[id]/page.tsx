@@ -26,6 +26,7 @@ import {
   SkillsConstellation,
   type SkillEntry,
 } from "@/components/skills-constellation";
+import { AgentChatView } from "@/components/agent-chat-view";
 import {
   Bot,
   Swords,
@@ -41,9 +42,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-type TabId = "skills" | "system-prompt" | "memory" | "heartbeat";
+type TabId = "chat" | "skills" | "system-prompt" | "memory" | "heartbeat";
 
 const TABS: { id: TabId; label: string; icon: typeof Swords }[] = [
+  { id: "chat", label: "Chat", icon: Bot },
   { id: "skills", label: "Skills", icon: Swords },
   { id: "system-prompt", label: "System Prompt", icon: FileText },
   { id: "memory", label: "Memory", icon: Brain },
@@ -60,9 +62,9 @@ export default function AgentConfigPage({
     getAgents,
     5000
   );
-  const { data: settings } = usePolling<Settings>(getSettings, 10000);
+  const { data: settings } = usePolling<Settings>(getSettings, 0);
 
-  const [activeTab, setActiveTab] = useState<TabId>("skills");
+  const [activeTab, setActiveTab] = useState<TabId>("chat");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -291,6 +293,11 @@ export default function AgentConfigPage({
 
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
+        {activeTab === "chat" && (
+          <div className="h-full min-h-0">
+            <AgentChatView agentId={agentId} agentName={agent.name} />
+          </div>
+        )}
         {activeTab === "skills" && (
           <SkillsTab
             skills={constellationSkills}

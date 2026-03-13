@@ -16,8 +16,8 @@ import {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { data: agents } = usePolling<Record<string, AgentConfig>>(getAgents, 5000);
-  const { data: teams } = usePolling<Record<string, TeamConfig>>(getTeams, 5000);
+  const { data: agents } = usePolling<Record<string, AgentConfig>>(getAgents, 0);
+  const { data: teams } = usePolling<Record<string, TeamConfig>>(getTeams, 0);
 
   const agentEntries = agents ? Object.entries(agents) : [];
   const teamEntries = teams ? Object.entries(teams) : [];
@@ -32,20 +32,8 @@ export function Sidebar() {
         <span className="text-sm font-bold tracking-tight">TinyClaw</span>
       </div>
 
-      {/* New Chat + Dashboard + Logs */}
+      {/* Dashboard + Logs */}
       <div className="px-3 pt-2 pb-1 space-y-0.5">
-        <Link
-          href="/console"
-          className={cn(
-            "flex items-center gap-2 w-full px-3 py-2 text-sm font-medium border transition-colors",
-            pathname === "/console"
-              ? "border-primary/50 bg-primary/10 text-foreground"
-              : "border-border hover:border-primary/30 hover:bg-muted text-muted-foreground"
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          New Chat
-        </Link>
         {[
           { href: "/", label: "Dashboard", icon: LayoutDashboard },
           { href: "/office", label: "Office", icon: Building2 },
@@ -91,7 +79,7 @@ export function Sidebar() {
           <div className="space-y-0.5">
             {agentEntries.length > 0 ? (
               agentEntries.map(([id, agent]) => {
-                const href = `/chat/agent/${id}`;
+                const href = `/agents/${id}`;
                 const active = pathname === href;
                 return (
                   <Link
