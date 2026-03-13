@@ -10,7 +10,7 @@ import {
 import {
   Zap, Plus, Hash, LayoutDashboard, ScrollText,
   Settings, SlidersHorizontal, ClipboardList, Building2,
-  FolderKanban,
+  FolderKanban, Swords,
 } from "lucide-react";
 
 export function Sidebar() {
@@ -115,6 +115,14 @@ export function Sidebar() {
                         {agent.provider}/{agent.model}
                       </p>
                     </div>
+                    <Link
+                      href={`/agents/${id}`}
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-all p-0.5"
+                      title="Configure skills"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Swords className="h-3 w-3" />
+                    </Link>
                   </Link>
                 );
               })

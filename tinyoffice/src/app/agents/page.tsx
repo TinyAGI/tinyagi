@@ -11,8 +11,9 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   Bot, Cpu, FolderOpen, FileText, Plus, Pencil, Trash2,
-  X, Check, Loader2,
+  X, Check, Loader2, Swords,
 } from "lucide-react";
+import Link from "next/link";
 
 type FormData = {
   id: string;
@@ -365,10 +366,16 @@ function AgentCard({
           </div>
         )}
 
-        <div className="pt-2 border-t">
+        <div className="pt-2 border-t flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
             Send messages with <code className="bg-muted px-1 py-0.5 font-mono">@{id}</code> prefix
           </p>
+          <Link href={`/agents/${id}`}>
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-primary">
+              <Swords className="h-3 w-3" />
+              Skills
+            </Button>
+          </Link>
         </div>
       </CardContent>
     </Card>
