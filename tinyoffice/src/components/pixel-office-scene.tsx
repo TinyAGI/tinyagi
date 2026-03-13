@@ -28,6 +28,18 @@ export type SceneRouteTarget = {
   state: PixelDeskStatus;
 };
 
+export type SceneBossRoom = {
+  label: string;
+  subtitle: string;
+  commandText: string;
+  commandTargets: string[];
+  connected: boolean;
+};
+
+export type SceneArchiveRoom = {
+  label: string;
+};
+
 export type SceneLounge = {
   label: string;
   agentCount: number;
@@ -55,6 +67,14 @@ export type SceneAgent = {
 export const PIXEL_SCENE_LAYOUT = {
   width: 1280,
   height: 720,
+  bossRoomX: 40,
+  bossRoomY: 26,
+  bossRoomWidth: 360,
+  bossRoomHeight: 272,
+  archiveRoomX: 430,
+  archiveRoomY: 26,
+  archiveRoomWidth: 214,
+  archiveRoomHeight: 272,
   orchestratorX: 478,
   orchestratorY: 112,
   orchestratorDeskWidth: 210,
@@ -244,6 +264,142 @@ function PixelPlant({ x, y }: { x: number; y: number }) {
       <ellipse cx={x - 10} cy={y - 34} rx={10} ry={6} fill="#2d5a27" transform={`rotate(-28 ${x - 10} ${y - 34})`} />
       <ellipse cx={x + 10} cy={y - 30} rx={10} ry={6} fill="#3d7a33" transform={`rotate(26 ${x + 10} ${y - 30})`} />
       <ellipse cx={x} cy={y - 42} rx={8} ry={5} fill="#3d7a33" />
+    </g>
+  );
+}
+
+function PixelFlower({ x, y }: { x: number; y: number }) {
+  return (
+    <g>
+      <rect x={x - 10} y={y - 16} width={20} height={16} fill="#6b4d38" rx={2} />
+      <rect x={x - 12} y={y - 18} width={24} height={4} fill="#7a5a43" rx={1} />
+      <rect x={x - 1} y={y - 36} width={3} height={20} fill="#3f6f2d" />
+      <ellipse cx={x - 8} cy={y - 36} rx={6} ry={5} fill="#f59e0b" />
+      <ellipse cx={x + 8} cy={y - 36} rx={6} ry={5} fill="#f59e0b" />
+      <ellipse cx={x} cy={y - 42} rx={6} ry={5} fill="#ef4444" />
+      <ellipse cx={x} cy={y - 31} rx={6} ry={5} fill="#fb7185" />
+      <circle cx={x} cy={y - 36} r={4} fill="#fde68a" />
+      <ellipse cx={x - 8} cy={y - 27} rx={7} ry={4} fill="#4d8b36" transform={`rotate(-20 ${x - 8} ${y - 27})`} />
+      <ellipse cx={x + 8} cy={y - 25} rx={7} ry={4} fill="#4d8b36" transform={`rotate(20 ${x + 8} ${y - 25})`} />
+    </g>
+  );
+}
+
+function PixelWindowScene({ x, y }: { x: number; y: number }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={86} height={56} fill="#d7eefc" rx={6} stroke="#8a7564" strokeWidth={1.5} />
+      <rect x={x + 4} y={y + 4} width={78} height={48} fill="#c5e7fb" rx={4} />
+      <rect x={x + 4} y={y + 28} width={78} height={24} fill="#b8dbef" rx={2} />
+      <rect x={x + 4} y={y + 34} width={78} height={18} fill="#cfe7b7" rx={2} />
+      <path d={`M ${x + 6} ${y + 48} Q ${x + 20} ${y + 36} ${x + 34} ${y + 47} T ${x + 62} ${y + 44} T ${x + 80} ${y + 47}`} fill="#99b97c" opacity={0.95} />
+      <path d={`M ${x + 8} ${y + 42} Q ${x + 22} ${y + 32} ${x + 40} ${y + 39} T ${x + 78} ${y + 38}`} fill="#86a86d" opacity={0.9} />
+      <circle cx={x + 20} cy={y + 16} r={6} fill="#fff6c8" opacity={0.9} />
+      <rect x={x + 41} y={y + 4} width={4} height={48} fill="#8a7564" />
+      <rect x={x + 4} y={y + 26} width={78} height={4} fill="#8a7564" />
+    </g>
+  );
+}
+
+function BossRoom({
+  frame,
+  bossRoom,
+}: {
+  frame: number;
+  bossRoom: SceneBossRoom;
+}) {
+  const x = PIXEL_SCENE_LAYOUT.bossRoomX;
+  const y = PIXEL_SCENE_LAYOUT.bossRoomY;
+  const width = PIXEL_SCENE_LAYOUT.bossRoomWidth;
+  const height = PIXEL_SCENE_LAYOUT.bossRoomHeight;
+  const pulse = bossRoom.connected ? 0.12 + (Math.sin(frame / 8) + 1) * 0.05 : 0.03;
+  const commandText = bossRoom.commandText.length > 34 ? `${bossRoom.commandText.slice(0, 34)}...` : bossRoom.commandText;
+  const targetText = bossRoom.commandTargets.length > 0 ? bossRoom.commandTargets.join(" · ") : "no targets";
+
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} fill="#7b6757" rx={12} stroke="#5b4b3f" strokeWidth={1.5} />
+      <rect x={x + 12} y={y + 12} width={width - 24} height={height - 24} fill="#b48f72" rx={10} stroke="#8f7158" strokeWidth={1} />
+      <rect x={x + 12} y={y + 128} width={width - 24} height={height - 140} fill="#8f745d" rx={0} />
+      <rect x={x + 18} y={y + 18} width={112} height={18} fill={COLORS.cardBg} rx={4} stroke={COLORS.textBlue} strokeWidth={1} />
+      <text x={x + 74} y={y + 31} textAnchor="middle" fontSize={12} fill={COLORS.textBlue} fontFamily="monospace">
+        {bossRoom.label}
+      </text>
+
+      <rect x={x + 26} y={y + 70} width={152} height={74} fill="#6e5848" rx={10} stroke="#5a473a" strokeWidth={1} />
+      <rect x={x + 38} y={y + 62} width={128} height={18} fill="#826957" rx={6} />
+      <rect x={x + 32} y={y + 102} width={24} height={36} fill="#775f4f" rx={5} />
+      <rect x={x + 148} y={y + 102} width={24} height={36} fill="#775f4f" rx={5} />
+      <rect x={x + 54} y={y + 96} width={96} height={28} fill="#c8aa8e" rx={8} />
+      <rect x={x + 60} y={y + 100} width={26} height={20} fill="#d4baa3" rx={5} />
+      <rect x={x + 89} y={y + 100} width={26} height={20} fill="#dcc4af" rx={5} />
+      <rect x={x + 118} y={y + 100} width={26} height={20} fill="#d4baa3" rx={5} />
+      <rect x={x + 44} y={y + 140} width={20} height={5} fill="#3b2d24" rx={2} />
+      <rect x={x + 140} y={y + 140} width={20} height={5} fill="#3b2d24" rx={2} />
+
+      <PixelWindowScene x={x + 246} y={y + 52} />
+      <rect x={x + 184} y={y + 152} width={122} height={42} fill="#2a221d" rx={8} stroke="#4d4034" strokeWidth={1} />
+      <rect x={x + 194} y={y + 128} width={102} height={34} fill={bossRoom.connected ? COLORS.screenActive : COLORS.screen} rx={6} stroke="#f59e0b" strokeWidth={1.5} />
+      <rect x={x + 230} y={y + 162} width={30} height={6} fill="#171311" rx={2} />
+      <rect x={x + 222} y={y + 168} width={46} height={5} fill="#171311" rx={2} />
+      <rect x={x + 212} y={y + 194} width={66} height={8} fill="#1d1815" rx={3} />
+      <rect x={x + 204} y={y + 204} width={82} height={6} fill="#171311" rx={3} />
+      <rect x={x + 296} y={y + 128} width={10} height={50} fill="#493d31" rx={3} />
+      <circle cx={x + 302} cy={y + 122} r={10} fill="#5b4c3f" />
+      <circle cx={x + 302} cy={y + 122} r={16} fill={COLORS.textAmber} opacity={pulse} />
+
+      <rect x={x + 18} y={y + height - 18} width={width - 36} height={6} fill="#251f1a" rx={3} />
+      <g transform={`translate(${x + 34}, ${y + height - 12}) scale(1.22)`}>
+        <PixelFlower x={0} y={0} />
+      </g>
+      <PixelOfficeChar x={x + 102} y={y + 126} color="#f59e0b" anim="idle" frame={frame} size={1.02} />
+    </g>
+  );
+}
+
+function ArchiveRoom({
+  frame,
+  archiveRoom,
+}: {
+  frame: number;
+  archiveRoom: SceneArchiveRoom;
+}) {
+  const x = PIXEL_SCENE_LAYOUT.archiveRoomX;
+  const y = PIXEL_SCENE_LAYOUT.archiveRoomY;
+  const width = PIXEL_SCENE_LAYOUT.archiveRoomWidth;
+  const height = PIXEL_SCENE_LAYOUT.archiveRoomHeight;
+  const glow = 0.08 + (Math.sin(frame / 10) + 1) * 0.04;
+  const shelfRows = [52, 92, 132];
+
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} fill="#6a584c" rx={12} stroke="#4c4036" strokeWidth={1.5} />
+      <rect x={x + 12} y={y + 12} width={width - 24} height={height - 24} fill="#8a7564" rx={10} stroke="#665546" strokeWidth={1} />
+      <rect x={x + 18} y={y + 14} width={92} height={18} fill={COLORS.cardBg} rx={4} stroke={COLORS.textBlue} strokeWidth={1} />
+      <text x={x + 64} y={y + 27} textAnchor="middle" fontSize={12} fill={COLORS.textBlue} fontFamily="monospace">
+        {archiveRoom.label}
+      </text>
+      <rect x={x + 18} y={y + 40} width={width - 36} height={height - 66} fill="#5a483d" rx={8} />
+      {shelfRows.map((rowY) => (
+        <rect key={rowY} x={x + 26} y={y + rowY} width={width - 52} height={6} fill="#3c2f27" rx={2} />
+      ))}
+      <rect x={x + 30} y={y + 34} width={14} height={108} fill="#493a30" rx={3} />
+      <rect x={x + width - 44} y={y + 34} width={14} height={108} fill="#493a30" rx={3} />
+      {Array.from({ length: 5 }).map((_, col) => (
+        <g key={col}>
+          <rect x={x + 38 + col * 26} y={y + 34} width={10} height={18 + ((col + 1) % 3) * 6} fill={["#a3e635", "#f59e0b", "#84cc16", "#ef4444", "#c084fc"][col]} rx={2} />
+          <rect x={x + 38 + col * 26} y={y + 72} width={10} height={18 + (col % 3) * 6} fill={["#60a5fa", "#fb7185", "#facc15", "#4ade80", "#c4b5fd"][col]} rx={2} />
+          <rect x={x + 38 + col * 26} y={y + 112} width={10} height={16 + ((col + 2) % 3) * 5} fill={["#f97316", "#22c55e", "#eab308", "#38bdf8", "#a78bfa"][col]} rx={2} />
+        </g>
+      ))}
+      <rect x={x + 142} y={y + 38} width={44} height={96} fill="#6c5a4d" rx={5} stroke="#4a3d34" strokeWidth={1} />
+      <rect x={x + 150} y={y + 46} width={28} height={18} fill="#3b3028" rx={3} />
+      <rect x={x + 150} y={y + 72} width={28} height={18} fill="#3b3028" rx={3} />
+      <rect x={x + 150} y={y + 98} width={28} height={28} fill="#3b3028" rx={3} />
+      <circle cx={x + 164} cy={y + 112} r={9} fill="#fef3c7" opacity={glow} />
+      <rect x={x + 68} y={y + 194} width={80} height={28} fill="#4a3b31" rx={7} stroke="#32261f" strokeWidth={1} />
+      <rect x={x + 76} y={y + 184} width={64} height={16} fill="#7b6758" rx={5} />
+      <rect x={x + 18} y={y + height - 18} width={width - 36} height={6} fill="#352922" rx={3} />
     </g>
   );
 }
@@ -725,6 +881,8 @@ export function PixelOfficeScene({
   connected,
   statusLabel,
   queue,
+  bossRoom,
+  archiveRoom,
   routeRoot,
   routeTargets,
   lounge,
@@ -737,6 +895,8 @@ export function PixelOfficeScene({
   connected: boolean;
   statusLabel: string;
   queue: SceneQueueSnapshot;
+  bossRoom: SceneBossRoom;
+  archiveRoom: SceneArchiveRoom;
   routeRoot: string;
   routeTargets: SceneRouteTarget[];
   lounge: SceneLounge;
@@ -749,11 +909,8 @@ export function PixelOfficeScene({
     <div className="relative size-full overflow-hidden rounded-md border border-border bg-[#13100e]">
       <svg viewBox={`0 0 ${PIXEL_SCENE_LAYOUT.width} ${PIXEL_SCENE_LAYOUT.height}`} className="absolute inset-0 size-full">
         <Floor />
-        <QueuePanel frame={frame} queue={queue} />
-        <ControlConsole frame={frame} connected={connected} statusLabel={statusLabel} />
-        <RoutingPanel frame={frame} connected={connected} routeRoot={routeRoot} routeTargets={routeTargets} />
-        <TaskSummaryPanel summaries={taskSummaries} />
-        <ResponseDock responses={responses} />
+        <BossRoom frame={frame} bossRoom={bossRoom} />
+        <ArchiveRoom frame={frame} archiveRoom={archiveRoom} />
 
         <Lounge lounge={lounge} />
 
@@ -794,12 +951,6 @@ export function PixelOfficeScene({
           </g>
         ))}
 
-        <text x={430} y={52} textAnchor="start" fontSize={24} fill={COLORS.text} fontFamily="monospace" fontWeight={700}>
-          Office Floor
-        </text>
-        <text x={430} y={74} textAnchor="start" fontSize={12} fill={COLORS.textMuted} fontFamily="monospace">
-          queue, tasks, teams and responses in one live scene
-        </text>
       </svg>
     </div>
   );

@@ -5,11 +5,14 @@ import { Loader2, Send } from "lucide-react";
 
 import {
   PixelOfficeScene,
+  PIXEL_SCENE_LAYOUT,
   getTaskStationMemberSpot,
   getLoungeMemberSpot,
   pointToPercent,
   type PixelDeskStatus,
   type SceneAgent,
+  type SceneArchiveRoom,
+  type SceneBossRoom,
   type SceneLounge,
   type SceneQueueSnapshot,
   type SceneResponseItem,
@@ -19,17 +22,22 @@ import {
 } from "@/components/pixel-office-scene";
 import { usePolling } from "@/lib/hooks";
 import {
+  getAgentMessages,
   getAgents,
+  getLogs,
   getQueueStatus,
   getResponses,
+  getSettings,
   getTasks,
   getTeams,
   sendMessage,
   subscribeToEvents,
   type AgentConfig,
+  type AgentMessage,
   type EventData,
   type QueueStatus,
   type ResponseData,
+  type Settings,
   type Task,
   type TeamConfig,
 } from "@/lib/api";
@@ -65,6 +73,16 @@ type OverlayBubble = {
   color: string;
   heading: string;
   message: string;
+};
+
+type ConversationEntry = {
+  id: string;
+  timestamp: number;
+  role: "user" | "agent";
+  agentId?: string;
+  sender: string;
+  message: string;
+  targetAgents: string[];
 };
 
 const AGENT_COLORS = ["#a3e635", "#84cc16", "#f59e0b", "#14b8a6", "#eab308", "#22c55e"];
@@ -169,12 +187,27 @@ export default function OfficePage() {
   const { data: tasks } = usePolling<Task[]>(getTasks, 4000);
   const { data: queueStatus } = usePolling<QueueStatus>(getQueueStatus, 2500);
   const { data: responses } = usePolling<ResponseData[]>(() => getResponses(6), 4000);
+  const { data: settings } = usePolling<Settings>(getSettings, 10000);
+  const { data: logs } = usePolling<{ lines: string[] }>(() => getLogs(40), 5000);
+  const { data: agentHistories } = usePolling<Record<string, AgentMessage[]>>(
+    async () => {
+      if (!agents) return {};
+      const entries = await Promise.all(
+        Object.keys(agents).map(async (agentId) => [agentId, await getAgentMessages(agentId, 40)] as const),
+      );
+      return Object.fromEntries(entries);
+    },
+    5000,
+    [agents],
+  );
 
   const [bubbles, setBubbles] = useState<LiveBubble[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
   const [connected, setConnected] = useState(false);
   const [clock, setClock] = useState({ now: Date.now(), frame: 0 });
+  const [archivePanel, setArchivePanel] = useState<"logs" | "workspace" | "outgoing" | "routing" | "tasks" | null>(null);
+  const [conversationFilter, setConversationFilter] = useState<string>("all");
 
   const seenRef = useRef(new Set<string>());
 
@@ -303,6 +336,20 @@ export default function OfficePage() {
       if (bubble.agentId.startsWith("_user_")) return;
       const existing = lookup.get(bubble.agentId);
       if (!existing || existing.timestamp < bubble.timestamp) lookup.set(bubble.agentId, bubble);
+    });
+    return lookup;
+  }, [bubbles]);
+
+  const latestUserTargetByAgent = useMemo(() => {
+    const lookup = new Map<string, LiveBubble>();
+    bubbles.forEach((bubble) => {
+      if (!bubble.agentId.startsWith("_user_")) return;
+      bubble.targetAgents.forEach((agentId) => {
+        const existing = lookup.get(agentId);
+        if (!existing || existing.timestamp < bubble.timestamp) {
+          lookup.set(agentId, bubble);
+        }
+      });
     });
     return lookup;
   }, [bubbles]);
@@ -445,15 +492,31 @@ export default function OfficePage() {
           1,
         );
         if (assignment.kind === "route") {
-          const age = clock.now - assignment.startAt;
-          const arriveProgress = clamp(age / 1200, 0, 1);
-          const returnProgress = clamp((age - 8500) / 1200, 0, 1);
-          if (age < 8500) {
+          const commandBubble = latestUserTargetByAgent.get(agentId);
+          const replyBubble =
+            latestBubble && commandBubble && latestBubble.timestamp > commandBubble.timestamp ? latestBubble : undefined;
+
+          if (commandBubble && !replyBubble) {
+            const age = clock.now - commandBubble.timestamp;
+            const arriveProgress = clamp(age / 1200, 0, 1);
             target = interpolatePoint(home, stationSpot, easeInOut(arriveProgress));
-          } else {
+            anim = age < 1200 ? "walk" : assignment.speaker ? "type" : "idle";
+          } else if (commandBubble && replyBubble) {
+            const replyAge = clock.now - replyBubble.timestamp;
+            const returnProgress = clamp(replyAge / 1200, 0, 1);
             target = interpolatePoint(stationSpot, home, easeInOut(returnProgress));
+            anim = replyAge < 1200 ? "walk" : index % 2 === 0 ? "idle" : "sleep";
+          } else {
+            const age = clock.now - assignment.startAt;
+            const arriveProgress = clamp(age / 1200, 0, 1);
+            const returnProgress = clamp((age - 8500) / 1200, 0, 1);
+            if (age < 8500) {
+              target = interpolatePoint(home, stationSpot, easeInOut(arriveProgress));
+            } else {
+              target = interpolatePoint(stationSpot, home, easeInOut(returnProgress));
+            }
+            anim = age < 1200 || (age >= 8500 && age < 9700) ? "walk" : assignment.speaker ? "type" : "idle";
           }
-          anim = age < 1200 || (age >= 8500 && age < 9700) ? "walk" : assignment.speaker ? "type" : "idle";
         } else {
           target = stationSpot;
           anim = assignment.status === "pending" ? "idle" : assignment.speaker ? "type" : "idle";
@@ -474,7 +537,7 @@ export default function OfficePage() {
         flip: target.x < home.x,
       };
     });
-  }, [agentEntries, clock.now, homePositions, latestAgentBubbleById, stationAssignments, taskStations.length]);
+  }, [agentEntries, clock.now, homePositions, latestAgentBubbleById, latestUserTargetByAgent, stationAssignments, taskStations.length]);
 
   const taskSummaries = useMemo<SceneTaskSummary[]>(() => {
     const allTasks = tasks ?? [];
@@ -536,6 +599,19 @@ export default function OfficePage() {
       }));
   }, [activeTasks, latestUserBubble, sceneAgents, stationAssignments]);
 
+  const bossRoomModel = useMemo<SceneBossRoom>(
+    () => ({
+      label: "Boss Room",
+      subtitle: "the human issues commands from here",
+      commandText: latestUserBubble ? trimText(latestUserBubble.message, 42) : "Message @agent or @team to dispatch work",
+      commandTargets: latestUserBubble?.targetAgents.slice(0, 3) ?? [],
+      connected,
+    }),
+    [connected, latestUserBubble],
+  );
+
+  const archiveRoomModel = useMemo<SceneArchiveRoom>(() => ({ label: "Archives" }), []);
+
   const activeWorkers = sceneAgents.filter((agent) => agent.anim === "type" || agent.anim === "walk").length;
   const statusLabel = sending
     ? "dispatching new message"
@@ -553,10 +629,10 @@ export default function OfficePage() {
     if (latestUserBubble && clock.now - latestUserBubble.timestamp < 10000) {
       items.push({
         id: latestUserBubble.id,
-        x: 585,
-        y: 80,
-        color: "#7c3aed",
-        heading: "control input",
+        x: PIXEL_SCENE_LAYOUT.bossRoomX + PIXEL_SCENE_LAYOUT.bossRoomWidth - 28,
+        y: PIXEL_SCENE_LAYOUT.bossRoomY + 86,
+        color: "#84cc16",
+        heading: "boss command",
         message: trimText(latestUserBubble.message, 220),
       });
     }
@@ -578,6 +654,80 @@ export default function OfficePage() {
     return items;
   }, [clock.now, latestAgentBubbleById, latestUserBubble, sceneAgents]);
 
+  const conversationEntries = useMemo<ConversationEntry[]>(
+    () => {
+      const historyEntries: ConversationEntry[] = [];
+      const seenHistory = new Set<string>();
+
+      Object.entries(agentHistories ?? {}).forEach(([agentId, messages]) => {
+        messages.forEach((message) => {
+          const dedupeKey =
+            message.role === "user"
+              ? `user:${message.message_id || message.id}:${message.content}`
+              : `agent:${agentId}:${message.message_id || message.id}:${message.content}`;
+          if (seenHistory.has(dedupeKey)) return;
+          seenHistory.add(dedupeKey);
+
+          historyEntries.push({
+            id: `history-${agentId}-${message.id}`,
+            timestamp: message.created_at,
+            role: message.role === "user" ? "user" : "agent",
+            agentId: message.role === "assistant" ? agentId : undefined,
+            sender: message.role === "user" ? message.sender || "Boss" : agents?.[agentId]?.name || `@${agentId}`,
+            message: message.content,
+            targetAgents: message.role === "user" ? [agentId] : [],
+          });
+        });
+      });
+
+      const liveEntries = [...bubbles].map((bubble) => {
+        if (bubble.agentId.startsWith("_user_")) {
+          return {
+            id: bubble.id,
+            timestamp: bubble.timestamp,
+            role: "user" as const,
+            sender: "Boss",
+            message: bubble.message,
+            targetAgents: bubble.targetAgents,
+          };
+        }
+
+        const agent = agents?.[bubble.agentId];
+        return {
+          id: bubble.id,
+          timestamp: bubble.timestamp,
+          role: "agent" as const,
+          agentId: bubble.agentId,
+          sender: agent?.name || `@${bubble.agentId}`,
+          message: bubble.message,
+          targetAgents: bubble.targetAgents,
+        };
+      });
+
+      const merged = [...historyEntries, ...liveEntries];
+      const seen = new Set<string>();
+      return merged
+        .sort((left, right) => left.timestamp - right.timestamp)
+        .filter((entry) => {
+          const key = `${entry.role}:${entry.agentId || "boss"}:${entry.timestamp}:${entry.message}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    },
+    [agentHistories, agents, bubbles],
+  );
+
+  const visibleConversation = useMemo(() => {
+    if (conversationFilter === "all") return conversationEntries.slice(-60);
+    return conversationEntries
+      .filter((entry) => {
+        if (entry.role === "agent") return entry.agentId === conversationFilter;
+        return entry.targetAgents.length === 0 || entry.targetAgents.includes(conversationFilter);
+      })
+      .slice(-60);
+  }, [conversationEntries, conversationFilter]);
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-hidden border-b border-border bg-[radial-gradient(circle_at_top,#1b2440,#0c0a09_58%)] p-3">
@@ -587,6 +737,8 @@ export default function OfficePage() {
             connected={connected}
             statusLabel={statusLabel}
             queue={queueSnapshot}
+            bossRoom={bossRoomModel}
+            archiveRoom={archiveRoomModel}
             routeRoot={routeRoot}
             routeTargets={routeTargets}
             lounge={loungeModel}
@@ -595,6 +747,227 @@ export default function OfficePage() {
             responses={responseItems}
             agents={sceneAgents}
           />
+
+          <div
+            className="absolute grid grid-cols-2 gap-2.5"
+            style={{
+              left: `${((PIXEL_SCENE_LAYOUT.archiveRoomX + 41) / PIXEL_SCENE_LAYOUT.width) * 100}%`,
+              top: `${((PIXEL_SCENE_LAYOUT.archiveRoomY + 178) / PIXEL_SCENE_LAYOUT.height) * 100}%`,
+              width: `${(154 / PIXEL_SCENE_LAYOUT.width) * 100}%`,
+            }}
+          >
+            {[
+              { id: "logs", label: "Logs" },
+              { id: "workspace", label: "Workspace" },
+              { id: "tasks", label: "Task Board" },
+              { id: "outgoing", label: "Outgoing Dock" },
+              { id: "routing", label: "Live Routing" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setArchivePanel((current) => (current === item.id ? null : (item.id as typeof archivePanel)))}
+                className={`rounded-md border border-stone-700 bg-[rgba(37,28,24,0.88)] px-2 py-1 text-[10px] font-mono text-stone-100 transition hover:border-lime-500 hover:text-lime-300 ${
+                  item.id === "routing" ? "col-span-2" : ""
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {archivePanel && (
+            <div className="absolute inset-y-6 right-4 z-30 w-[380px] rounded-md border border-stone-700 bg-stone-950/95 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-stone-800 px-4 py-3">
+                <div className="font-mono text-xs uppercase tracking-[0.18em] text-lime-300">
+                  {archivePanel === "logs" && "Logs"}
+                  {archivePanel === "workspace" && "Workspace"}
+                  {archivePanel === "tasks" && "Task Board"}
+                  {archivePanel === "outgoing" && "Outgoing Dock"}
+                  {archivePanel === "routing" && "Live Routing"}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setArchivePanel(null)}
+                  className="rounded border border-stone-700 px-2 py-1 font-mono text-[10px] text-stone-300 transition hover:border-lime-500 hover:text-lime-300"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="max-h-[calc(100%-52px)] overflow-auto p-4">
+                {archivePanel === "logs" && (
+                  <div className="space-y-2 font-mono text-xs text-stone-300">
+                    {(logs?.lines ?? []).length > 0 ? (
+                      (logs?.lines ?? []).map((line, index) => (
+                        <div key={`${index}-${line.slice(0, 12)}`} className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2 break-words">
+                          {line}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2 text-stone-500">No logs yet</div>
+                    )}
+                  </div>
+                )}
+
+                {archivePanel === "workspace" && (
+                  <div className="space-y-3 font-mono text-xs text-stone-300">
+                    <div className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2">
+                      workspace: {settings?.workspace?.path || settings?.workspace?.name || "not configured"}
+                    </div>
+                    {agentEntries.map(([agentId, agent]) => (
+                      <div key={agentId} className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2">
+                        <div className="text-lime-300">@{agentId}</div>
+                        <div className="mt-1 break-all text-stone-400">{agent.working_directory || "no working directory"}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {archivePanel === "tasks" && (
+                  <div className="grid grid-cols-2 gap-3 font-mono text-xs text-stone-300">
+                    {taskSummaries.map((summary) => (
+                      <div key={summary.label} className="rounded border border-stone-800 bg-stone-900/90 px-3 py-3">
+                        <div className="text-stone-500">{summary.label}</div>
+                        <div className="mt-2 text-xl text-lime-300">{summary.count}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {archivePanel === "outgoing" && (
+                  <div className="space-y-2 font-mono text-xs text-stone-300">
+                    {responseItems.length > 0 ? (
+                      responseItems.map((response) => (
+                        <div key={response.id} className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2">
+                          <div className="text-lime-300">{response.label}</div>
+                          <div className="mt-1 text-stone-500">{response.subtitle}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2 text-stone-500">No outgoing responses</div>
+                    )}
+                  </div>
+                )}
+
+                {archivePanel === "routing" && (
+                  <div className="space-y-3 font-mono text-xs text-stone-300">
+                    <div className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2">
+                      <div className="text-stone-500">root</div>
+                      <div className="mt-1 text-lime-300">{routeRoot}</div>
+                    </div>
+                    {routeTargets.length > 0 ? (
+                      routeTargets.map((target) => (
+                        <div key={`${target.label}-${target.state}`} className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2">
+                          <div style={{ color: target.color }}>{target.label}</div>
+                          <div className="mt-1 text-stone-500">{target.state}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded border border-stone-800 bg-stone-900/90 px-3 py-2 text-stone-500">No active route</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div
+            className="absolute z-10 flex flex-col overflow-hidden rounded-[18px] border border-[#7b6555] bg-[rgba(182,151,122,0.92)] shadow-2xl"
+            style={{
+              left: `${(680 / PIXEL_SCENE_LAYOUT.width) * 100}%`,
+              top: `${(26 / PIXEL_SCENE_LAYOUT.height) * 100}%`,
+              width: `${(560 / PIXEL_SCENE_LAYOUT.width) * 100}%`,
+              height: `${(668 / PIXEL_SCENE_LAYOUT.height) * 100}%`,
+            }}
+          >
+            <div className="border-b border-[#8e755f] bg-[rgba(120,95,75,0.42)] px-4 py-3">
+              <div className="mb-3 inline-flex h-[18px] items-center rounded-[4px] border border-[#84cc16] bg-[#1c1917] px-3 text-[12px] font-mono text-[#84cc16] shadow-[0_0_0_1px_#84cc16]">
+                Conversations
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConversationFilter("all")}
+                  className={`rounded-md border px-2.5 py-1 font-mono text-[10px] transition ${
+                    conversationFilter === "all"
+                      ? "border-[#84cc16] bg-[rgba(132,204,22,0.14)] text-[#2f4d0d]"
+                      : "border-[#826b58] bg-[rgba(244,231,214,0.46)] text-[#5e4b3d] hover:border-[#84cc16] hover:text-[#2f4d0d]"
+                  }`}
+                >
+                  All Agents
+                </button>
+                {agentEntries.map(([agentId, agent]) => (
+                  <button
+                    key={agentId}
+                    type="button"
+                    onClick={() => setConversationFilter(agentId)}
+                    className={`rounded-md border px-2.5 py-1 font-mono text-[10px] transition ${
+                      conversationFilter === agentId
+                        ? "border-[#84cc16] bg-[rgba(132,204,22,0.14)] text-[#2f4d0d]"
+                        : "border-[#826b58] bg-[rgba(244,231,214,0.46)] text-[#5e4b3d] hover:border-[#84cc16] hover:text-[#2f4d0d]"
+                    }`}
+                  >
+                    {agent.name || `@${agentId}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,rgba(199,171,143,0.92),rgba(176,146,119,0.88))] px-4 py-4">
+              <div className="space-y-3">
+                {visibleConversation.length > 0 ? (
+                  visibleConversation.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={`rounded-md border px-3 py-2 ${
+                        entry.role === "user"
+                          ? "ml-12 border-[#84cc16] bg-[rgba(235,248,196,0.78)]"
+                          : "mr-12 border-[#8b7460] bg-[rgba(243,229,211,0.72)]"
+                      }`}
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${entry.role === "user" ? "text-[#45680f]" : "text-[#6d5948]"}`}>
+                          {entry.sender}
+                        </span>
+                        <span className="font-mono text-[10px] text-[#7f6a57]">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                      <p className="break-words text-sm leading-relaxed text-[#231b16]">{entry.message}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-md border border-dashed border-[#8b7460] bg-[rgba(244,231,214,0.45)] px-4 py-6 text-center text-sm text-[#6f5c4b]">
+                    No messages for this view
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-[#8e755f] bg-[rgba(120,95,75,0.36)] px-4 py-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={conversationFilter === "all" ? "Message @agent or @team..." : `Message @${conversationFilter}...`}
+                  className="h-10 flex-1 rounded-md border border-[#8b7460] bg-[rgba(244,231,214,0.78)] px-3 text-sm text-[#231b16] outline-none transition-colors placeholder:text-[#8a7564] focus:border-[#84cc16]"
+                />
+                <button
+                  onClick={() => void handleSend()}
+                  disabled={!chatInput.trim() || sending}
+                  className="flex h-10 w-10 items-center justify-center rounded-md border border-[#8b7460] bg-[rgba(244,231,214,0.78)] text-[#6d5948] transition-colors hover:border-[#84cc16] hover:text-[#45680f] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </button>
+              </div>
+              <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-[#6f5c4b]">
+                <span>Cmd/Ctrl + Enter to send</span>
+                <span>
+                  {connected ? "SSE online" : "SSE disconnected"} · {taskSummaries[1]?.count ?? 0} active · {queueSnapshot.outgoing} outgoing
+                </span>
+              </div>
+            </div>
+          </div>
 
           {overlayBubbles.map((bubble) => {
             const position = pointToPercent(bubble.x, bubble.y);
@@ -620,32 +993,6 @@ export default function OfficePage() {
               </div>
             );
           })}
-        </div>
-      </div>
-
-      <div className="border-t border-border bg-card px-4 py-3">
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={chatInput}
-            onChange={(event) => setChatInput(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message @agent or @team..."
-            className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-primary"
-          />
-          <button
-            onClick={() => void handleSend()}
-            disabled={!chatInput.trim() || sending}
-            className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
-        </div>
-        <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-muted-foreground">
-          <span>Cmd/Ctrl + Enter to send</span>
-          <span>
-            {connected ? "SSE online" : "SSE disconnected"} · {taskSummaries[1]?.count ?? 0} active · {queueSnapshot.outgoing} outgoing
-          </span>
         </div>
       </div>
     </div>
