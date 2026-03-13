@@ -51,8 +51,6 @@ type TeamGroup = {
 
 type StationAssignment = {
   stationIndex: number;
-  memberIndex: number;
-  memberTotal: number;
   kind: "task" | "route";
   status: PixelDeskStatus;
   startAt: number;
@@ -313,38 +311,57 @@ export default function OfficePage() {
     const allTasks = tasks ?? [];
     return allTasks
       .filter((task) => task.status === "in_progress" || task.status === "review")
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, 4);
+      .sort((left, right) => right.updatedAt - left.updatedAt);
   }, [tasks]);
 
   const taskStations = useMemo<SceneTaskStation[]>(() => {
-    const stations: SceneTaskStation[] = activeTasks.map((task) => ({
-      id: `task-${task.id}`,
-      label: task.title,
-      subtitle:
-        task.assigneeType === "team"
-          ? `team ${task.assignee || "unassigned"} · ${task.status.replace("_", " ")}`
-          : `agent ${task.assignee || "unassigned"} · ${task.status.replace("_", " ")}`,
-      status: taskTone(task),
-      kind: "task",
-    }));
-
-    const recentRouteBubble = [...bubbles]
-      .filter((bubble) => clock.now - bubble.timestamp < 10000)
-      .sort((left, right) => right.timestamp - left.timestamp)[0];
-
-    if (recentRouteBubble && stations.length < 4) {
-      stations.push({
-        id: `route-${recentRouteBubble.id}`,
-        label: trimText(recentRouteBubble.message, 32),
-        subtitle: "live conversation route",
-        status: routeTone(recentRouteBubble.message),
-        kind: "route",
+    return agentEntries.map(([agentId, agent]) => {
+      const directTask = activeTasks.find(
+        (task) => task.assigneeType === "agent" && task.assignee === agentId,
+      );
+      const teamTask = activeTasks.find((task) => {
+        if (task.assigneeType !== "team" || !task.assignee) return false;
+        const team = teams?.[task.assignee];
+        return Boolean(team?.agents.includes(agentId));
       });
-    }
+      const activeTask = directTask ?? teamTask;
+      const recentRouteBubble = [...bubbles]
+        .filter(
+          (bubble) =>
+            clock.now - bubble.timestamp < 10000 &&
+            (bubble.agentId === agentId || bubble.targetAgents.includes(agentId)),
+        )
+        .sort((left, right) => right.timestamp - left.timestamp)[0];
 
-    return stations;
-  }, [activeTasks, bubbles, clock.now]);
+      if (activeTask) {
+        return {
+          id: `desk-${agentId}`,
+          label: agent.name,
+          subtitle: trimText(activeTask.title, 42),
+          status: taskTone(activeTask),
+          kind: "task" as const,
+        };
+      }
+
+      if (recentRouteBubble) {
+        return {
+          id: `desk-${agentId}`,
+          label: agent.name,
+          subtitle: trimText(recentRouteBubble.message, 42),
+          status: routeTone(recentRouteBubble.message),
+          kind: "route" as const,
+        };
+      }
+
+      return {
+        id: `desk-${agentId}`,
+        label: agent.name,
+        subtitle: `@${agentId} waiting in lounge`,
+        status: "empty" as const,
+        kind: "task" as const,
+      };
+    });
+  }, [activeTasks, agentEntries, bubbles, clock.now, teams]);
 
   const stationAssignments = useMemo(() => {
     const assignments = new Map<string, StationAssignment>();
@@ -363,10 +380,9 @@ export default function OfficePage() {
 
       assignedAgentIds.forEach((agentId, memberIndex) => {
         if (!assignments.has(agentId)) {
+          const agentDeskIndex = agentEntries.findIndex(([id]) => id === agentId);
           assignments.set(agentId, {
-            stationIndex,
-            memberIndex,
-            memberTotal: assignedAgentIds.length,
+            stationIndex: agentDeskIndex >= 0 ? agentDeskIndex : stationIndex,
             kind: "task",
             status: taskTone(task),
             startAt: task.updatedAt,
@@ -377,36 +393,34 @@ export default function OfficePage() {
       });
     });
 
-    const routeStationIndex = taskStations.findIndex((station) => station.kind === "route");
     const recentRouteBubble = [...bubbles]
       .filter((bubble) => clock.now - bubble.timestamp < 10000)
       .sort((left, right) => right.timestamp - left.timestamp)[0];
 
-    if (routeStationIndex >= 0 && recentRouteBubble) {
+    if (recentRouteBubble) {
       const routeAgents = recentRouteBubble.targetAgents.filter((agentId) => agents?.[agentId]).slice(0, 3);
       const speakerIsAgent = !recentRouteBubble.agentId.startsWith("_user_") && agents?.[recentRouteBubble.agentId];
       const participantIds = speakerIsAgent
         ? [recentRouteBubble.agentId, ...routeAgents.filter((agentId) => agentId !== recentRouteBubble.agentId)]
         : routeAgents;
 
-      participantIds.forEach((agentId, memberIndex) => {
+      participantIds.forEach((agentId) => {
         if (!assignments.has(agentId)) {
+          const agentDeskIndex = agentEntries.findIndex(([id]) => id === agentId);
           assignments.set(agentId, {
-            stationIndex: routeStationIndex,
-            memberIndex,
-            memberTotal: participantIds.length,
+            stationIndex: agentDeskIndex >= 0 ? agentDeskIndex : 0,
             kind: "route",
             status: routeTone(recentRouteBubble.message),
             startAt: recentRouteBubble.timestamp,
             label: trimText(recentRouteBubble.message, 30),
-            speaker: speakerIsAgent ? agentId === recentRouteBubble.agentId : memberIndex === 0,
+            speaker: speakerIsAgent ? agentId === recentRouteBubble.agentId : participantIds[0] === agentId,
           });
         }
       });
     }
 
     return assignments;
-  }, [activeTasks, taskStations, bubbles, clock.now, agents, teams]);
+  }, [activeTasks, bubbles, clock.now, agents, teams, agentEntries]);
 
   const sceneAgents = useMemo<SceneAgent[]>(() => {
     return agentEntries.map(([agentId], index) => {
@@ -427,8 +441,8 @@ export default function OfficePage() {
         const stationSpot = getTaskStationMemberSpot(
           assignment.stationIndex,
           Math.max(1, taskStations.length),
-          assignment.memberIndex,
-          assignment.memberTotal,
+          0,
+          1,
         );
         if (assignment.kind === "route") {
           const age = clock.now - assignment.startAt;

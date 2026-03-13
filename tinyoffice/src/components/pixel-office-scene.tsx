@@ -66,14 +66,14 @@ export const PIXEL_SCENE_LAYOUT = {
   routePanelY: 26,
   routePanelWidth: 404,
   routePanelHeight: 224,
-  loungeX: 44,
-  loungeY: 324,
-  loungeWidth: 452,
-  loungeHeight: 332,
-  stationAreaX: 534,
-  stationAreaY: 338,
-  stationAreaWidth: 706,
-  stationAreaHeight: 316,
+  loungeX: 34,
+  loungeY: 560,
+  loungeWidth: 560,
+  loungeHeight: 104,
+  stationAreaX: 34,
+  stationAreaY: 434,
+  stationAreaWidth: 560,
+  stationAreaHeight: 108,
 } as const;
 
 const COLORS = {
@@ -129,32 +129,36 @@ export function pointToPercent(x: number, y: number) {
 }
 
 export function getLoungeMemberSpot(memberIndex: number, memberTotal: number) {
-  const columns = Math.min(4, Math.max(1, memberTotal));
+  const columns = Math.min(6, Math.max(1, memberTotal));
   const rows = Math.ceil(memberTotal / columns);
   const column = memberIndex % columns;
   const row = Math.floor(memberIndex / columns);
-  const innerLeft = PIXEL_SCENE_LAYOUT.loungeX + 56;
-  const innerRight = PIXEL_SCENE_LAYOUT.loungeX + PIXEL_SCENE_LAYOUT.loungeWidth - 56;
+  const innerLeft = PIXEL_SCENE_LAYOUT.loungeX + 84;
+  const innerRight = PIXEL_SCENE_LAYOUT.loungeX + PIXEL_SCENE_LAYOUT.loungeWidth - 84;
   const spacingX = columns === 1 ? 0 : (innerRight - innerLeft) / Math.max(1, columns - 1);
-  const baseY = PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight - 64;
-  const spacingY = rows === 1 ? 0 : 44;
+  const activityTop = PIXEL_SCENE_LAYOUT.loungeY + 48;
+  const activityBottom = PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight - 26;
+  const baseY = activityBottom;
+  const spacingY = rows === 1 ? 0 : 26;
   return {
     x: innerLeft + column * spacingX,
-    y: baseY - row * spacingY,
+    y: Math.max(activityTop + 18, baseY - row * spacingY),
   };
 }
 
 export function getTaskStationRect(index: number, total: number) {
-  const columns = total <= 2 ? total : 2;
+  const columns = Math.min(4, Math.max(1, total));
   const rows = Math.ceil(total / Math.max(1, columns));
-  const gapX = 24;
-  const gapY = 26;
-  const width = (PIXEL_SCENE_LAYOUT.stationAreaWidth - gapX) / 2;
-  const height = rows === 1 ? PIXEL_SCENE_LAYOUT.stationAreaHeight : (PIXEL_SCENE_LAYOUT.stationAreaHeight - gapY) / 2;
+  const gapX = 26;
+  const gapY = 34;
+  const width = 148;
+  const height = 96;
+  const totalRowWidth = columns * width + (columns - 1) * gapX;
+  const startX = PIXEL_SCENE_LAYOUT.stationAreaX + (PIXEL_SCENE_LAYOUT.stationAreaWidth - totalRowWidth) / 2;
   const row = Math.floor(index / Math.max(1, columns));
   const column = index % Math.max(1, columns);
   return {
-    x: PIXEL_SCENE_LAYOUT.stationAreaX + column * (width + gapX),
+    x: startX + column * (width + gapX),
     y: PIXEL_SCENE_LAYOUT.stationAreaY + row * (height + gapY),
     width,
     height,
@@ -169,18 +173,18 @@ export function getTaskStationMemberSpot(
 ) {
   const station = getTaskStationRect(stationIndex, totalStations);
   const deskCenterX = station.x + station.width / 2;
-  const deskFrontY = station.y + 144;
+  const deskFrontY = station.y + 86;
   if (memberTotal <= 1) return { x: deskCenterX, y: deskFrontY };
   if (memberTotal === 2) {
     return {
-      x: deskCenterX + (memberIndex === 0 ? -34 : 34),
-      y: deskFrontY + (memberIndex === 0 ? 4 : 0),
+      x: deskCenterX + (memberIndex === 0 ? -16 : 16),
+      y: deskFrontY + (memberIndex === 0 ? 2 : 0),
     };
   }
-  const offsets = [-42, 0, 42];
+  const offsets = [-20, 0, 20];
   return {
     x: deskCenterX + offsets[Math.min(memberIndex, 2)],
-    y: deskFrontY + (memberIndex === 1 ? -8 : 6),
+    y: deskFrontY + (memberIndex === 1 ? -4 : 4),
   };
 }
 
@@ -411,8 +415,31 @@ function Lounge({
 }: {
   lounge: SceneLounge;
 }) {
+  const sofaX = PIXEL_SCENE_LAYOUT.loungeX + 56;
+  const sofaY = PIXEL_SCENE_LAYOUT.loungeY + 44;
+  const sofaWidth = PIXEL_SCENE_LAYOUT.loungeWidth - 112;
   return (
     <g>
+      <rect
+        x={PIXEL_SCENE_LAYOUT.loungeX + 10}
+        y={PIXEL_SCENE_LAYOUT.loungeY - 18}
+        width={116}
+        height={18}
+        fill={COLORS.cardBg}
+        rx={4}
+        stroke={COLORS.textBlue}
+        strokeWidth={1}
+      />
+      <text
+        x={PIXEL_SCENE_LAYOUT.loungeX + 68}
+        y={PIXEL_SCENE_LAYOUT.loungeY - 5}
+        textAnchor="middle"
+        fontSize={12}
+        fill={COLORS.textBlue}
+        fontFamily="monospace"
+      >
+        {lounge.label}
+      </text>
       <rect
         x={PIXEL_SCENE_LAYOUT.loungeX}
         y={PIXEL_SCENE_LAYOUT.loungeY}
@@ -425,80 +452,135 @@ function Lounge({
         opacity={0.92}
       />
       <rect
-        x={PIXEL_SCENE_LAYOUT.loungeX + 14}
-        y={PIXEL_SCENE_LAYOUT.loungeY + 12}
-        width={92}
-        height={18}
-        fill={COLORS.cardBg}
-        rx={4}
-        stroke={COLORS.textBlue}
-        strokeWidth={1}
-      />
-      <text
-        x={PIXEL_SCENE_LAYOUT.loungeX + 60}
-        y={PIXEL_SCENE_LAYOUT.loungeY + 25}
-        textAnchor="middle"
-        fontSize={12}
-        fill={COLORS.textBlue}
-        fontFamily="monospace"
-      >
-        {lounge.label}
-      </text>
-      <text
-        x={PIXEL_SCENE_LAYOUT.loungeX + PIXEL_SCENE_LAYOUT.loungeWidth - 14}
-        y={PIXEL_SCENE_LAYOUT.loungeY + 24}
-        textAnchor="end"
-        fontSize={11}
-        fill={COLORS.textMuted}
-        fontFamily="monospace"
-      >
-        {lounge.agentCount} agents · {lounge.teamCount} teams
-      </text>
-      <rect
-        x={PIXEL_SCENE_LAYOUT.loungeX + 20}
-        y={PIXEL_SCENE_LAYOUT.loungeY + 72}
-        width={PIXEL_SCENE_LAYOUT.loungeWidth - 40}
-        height={56}
-        fill="#2c2622"
-        rx={10}
-      />
-      <rect
-        x={PIXEL_SCENE_LAYOUT.loungeX + 20}
-        y={PIXEL_SCENE_LAYOUT.loungeY + 54}
-        width={PIXEL_SCENE_LAYOUT.loungeWidth - 40}
-        height={30}
-        fill="#3a332d"
-        rx={10}
-      />
-      <rect
-        x={PIXEL_SCENE_LAYOUT.loungeX + 164}
-        y={PIXEL_SCENE_LAYOUT.loungeY + 148}
-        width={124}
-        height={28}
-        fill="#221d19"
-        rx={6}
+        x={PIXEL_SCENE_LAYOUT.loungeX + 8}
+        y={PIXEL_SCENE_LAYOUT.loungeY + 8}
+        width={PIXEL_SCENE_LAYOUT.loungeWidth - 16}
+        height={PIXEL_SCENE_LAYOUT.loungeHeight - 16}
+        fill="#151210"
+        rx={8}
         stroke={COLORS.loungeAccent}
         strokeWidth={1}
       />
-      <rect x={PIXEL_SCENE_LAYOUT.loungeX + 214} y={PIXEL_SCENE_LAYOUT.loungeY + 138} width={20} height={12} fill="#6b5a48" rx={2} />
-      <path
-        d={`M ${PIXEL_SCENE_LAYOUT.loungeX + 218} ${PIXEL_SCENE_LAYOUT.loungeY + 134} Q ${PIXEL_SCENE_LAYOUT.loungeX + 224} ${PIXEL_SCENE_LAYOUT.loungeY + 126} ${PIXEL_SCENE_LAYOUT.loungeX + 230} ${PIXEL_SCENE_LAYOUT.loungeY + 134}`}
-        stroke={COLORS.textMuted}
-        strokeWidth={1.5}
-        fill="none"
-        opacity={0.6}
+      <rect
+        x={sofaX}
+        y={sofaY}
+        width={sofaWidth}
+        height={34}
+        fill="#46382f"
+        rx={10}
+        stroke="#6a5747"
+        strokeWidth={1}
+        opacity={0.96}
       />
       <rect
-        x={PIXEL_SCENE_LAYOUT.loungeX + 12}
-        y={PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight - 30}
-        width={PIXEL_SCENE_LAYOUT.loungeWidth - 24}
-        height={16}
-        fill="#2c2622"
+        x={sofaX + 14}
+        y={sofaY - 10}
+        width={sofaWidth - 28}
+        height={12}
+        fill="#5b4a3e"
         rx={5}
-        opacity={0.84}
+        opacity={0.98}
       />
-      <PixelPlant x={PIXEL_SCENE_LAYOUT.loungeX + 28} y={PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight - 6} />
-      <PixelPlant x={PIXEL_SCENE_LAYOUT.loungeX + PIXEL_SCENE_LAYOUT.loungeWidth - 28} y={PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight - 6} />
+      <rect
+        x={sofaX + 6}
+        y={sofaY + 6}
+        width={20}
+        height={28}
+        fill="#54453a"
+        rx={5}
+      />
+      <rect
+        x={sofaX + sofaWidth - 26}
+        y={sofaY + 6}
+        width={20}
+        height={28}
+        fill="#54453a"
+        rx={5}
+      />
+      <rect
+        x={sofaX + 26}
+        y={sofaY + 14}
+        width={sofaWidth - 52}
+        height={18}
+        fill="#332922"
+        rx={7}
+        opacity={0.95}
+      />
+      <rect
+        x={sofaX + 34}
+        y={sofaY + 10}
+        width={Math.floor((sofaWidth - 84) / 3)}
+        height={20}
+        fill="#6b594c"
+        rx={5}
+      />
+      <rect
+        x={sofaX + 42 + Math.floor((sofaWidth - 84) / 3)}
+        y={sofaY + 10}
+        width={Math.floor((sofaWidth - 84) / 3)}
+        height={20}
+        fill="#725f51"
+        rx={5}
+      />
+      <rect
+        x={sofaX + 50 + Math.floor(((sofaWidth - 84) / 3) * 2)}
+        y={sofaY + 10}
+        width={Math.floor((sofaWidth - 84) / 3)}
+        height={20}
+        fill="#6b594c"
+        rx={5}
+      />
+      <rect
+        x={sofaX + 34}
+        y={sofaY + 31}
+        width={sofaWidth - 68}
+        height={6}
+        fill="#251d18"
+        rx={3}
+        opacity={0.95}
+      />
+      <rect
+        x={sofaX + 12}
+        y={sofaY + 34}
+        width={16}
+        height={4}
+        fill="#1f1814"
+        rx={2}
+      />
+      <rect
+        x={sofaX + sofaWidth - 28}
+        y={sofaY + 34}
+        width={16}
+        height={4}
+        fill="#1f1814"
+        rx={2}
+      />
+      <rect
+        x={sofaX + 32}
+        y={sofaY + 9}
+        width={2}
+        height={22}
+        fill="#877262"
+        opacity={0.65}
+      />
+      <rect
+        x={sofaX + sofaWidth / 2 - 1}
+        y={sofaY + 9}
+        width={2}
+        height={22}
+        fill="#877262"
+        opacity={0.65}
+      />
+      <rect
+        x={sofaX + sofaWidth - 34}
+        y={sofaY + 9}
+        width={2}
+        height={22}
+        fill="#877262"
+        opacity={0.65}
+      />
+      <PixelPlant x={PIXEL_SCENE_LAYOUT.loungeX + 28} y={PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight - 2} />
+      <PixelPlant x={PIXEL_SCENE_LAYOUT.loungeX + PIXEL_SCENE_LAYOUT.loungeWidth - 28} y={PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight - 2} />
     </g>
   );
 }
@@ -515,35 +597,33 @@ function TaskStation({
   total: number;
 }) {
   const rect = getTaskStationRect(index, total);
-  const deskX = rect.x + rect.width / 2 - 112;
-  const deskY = rect.y + 38;
+  const deskX = rect.x + rect.width / 2 - 38;
+  const deskY = rect.y + 16;
   const colors = deskPalette(station.status);
   const glow = station.status === "running" ? 0.18 + (Math.sin(frame / 5 + index) + 1) * 0.09 : station.status === "done" ? 0.2 : 0.07;
   const glowColor = toneColor(station.status);
   return (
     <g>
-      <rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} fill="#161311" rx={12} stroke={station.kind === "route" ? COLORS.textBlue : colors.border} strokeWidth={1.5} />
-      <rect x={deskX - 10} y={deskY - 10} width={244} height={154} fill={glowColor} rx={14} opacity={glow} />
-      <rect x={deskX + 18} y={deskY + 138} width={10} height={28} fill="#1a1d27" rx={2} />
-      <rect x={deskX + 196} y={deskY + 138} width={10} height={28} fill="#1a1d27" rx={2} />
-      <rect x={deskX} y={deskY + 14} width={224} height={114} fill={colors.desk} rx={8} stroke={colors.border} strokeWidth={2} />
-      <rect x={deskX - 4} y={deskY} width={232} height={18} fill={COLORS.deskTop} rx={8} />
-      <rect x={deskX + 72} y={deskY + 10} width={80} height={8} fill="#433830" rx={3} />
-      <rect x={deskX + 78} y={deskY + 26} width={68} height={42} fill={colors.screen} rx={4} stroke={colors.border} strokeWidth={1} />
-      <rect x={deskX + 102} y={deskY + 68} width={20} height={8} fill="#1a1d27" />
-      <rect x={deskX + 92} y={deskY + 76} width={40} height={5} fill="#1a1d27" rx={2} />
-      <rect x={deskX + 82} y={deskY + 102} width={60} height={14} fill="#1c1917" rx={3} stroke="#3a332d" strokeWidth={1} />
-      <rect x={deskX + 90} y={deskY + 122} width={44} height={18} fill="#2c2622" rx={6} />
-      <rect x={deskX + 102} y={deskY + 136} width={20} height={10} fill="#221d19" rx={2} />
+      <ellipse cx={deskX + 38} cy={deskY + 56} rx={42} ry={10} fill={glowColor} opacity={glow * 0.65} />
+      <rect x={deskX + 6} y={deskY + 50} width={8} height={16} fill="#1a1d27" rx={2} />
+      <rect x={deskX + 62} y={deskY + 50} width={8} height={16} fill="#1a1d27" rx={2} />
+      <rect x={deskX} y={deskY + 8} width={76} height={44} fill={colors.desk} rx={6} stroke={colors.border} strokeWidth={1.5} />
+      <rect x={deskX - 2} y={deskY} width={80} height={10} fill={COLORS.deskTop} rx={6} />
+      <rect x={deskX + 24} y={deskY + 4} width={28} height={4} fill="#433830" rx={2} />
+      <rect x={deskX + 22} y={deskY + 14} width={32} height={20} fill={colors.screen} rx={3} stroke={colors.border} strokeWidth={1} />
+      <rect x={deskX + 34} y={deskY + 34} width={8} height={5} fill="#1a1d27" />
+      <rect x={deskX + 30} y={deskY + 39} width={16} height={3} fill="#1a1d27" rx={1} />
+      <rect x={deskX + 25} y={deskY + 45} width={24} height={6} fill="#1c1917" rx={2} stroke="#3a332d" strokeWidth={0.8} />
+      <rect x={deskX + 28} y={deskY + 58} width={18} height={10} fill="#2c2622" rx={4} />
       {station.status === "running" && (
         <>
           {Array.from({ length: 4 }).map((_, row) => (
             <rect
               key={row}
-              x={deskX + 88 + (row % 2) * 4}
-              y={deskY + 32 + row * 8}
-              width={20 + ((row * 11) % 12)}
-              height={5}
+              x={deskX + 26 + (row % 2) * 2}
+              y={deskY + 18 + row * 4}
+              width={8 + ((row * 7) % 6)}
+              height={2}
               fill={COLORS.textBlue}
               opacity={0.35 + ((frame + row) % 3) * 0.15}
               rx={1}
@@ -552,32 +632,23 @@ function TaskStation({
         </>
       )}
       {station.status === "pending" && (
-        <text x={deskX + 112} y={deskY + 52} textAnchor="middle" fontSize={13} fill={COLORS.textAmber} fontFamily="monospace">
-          queued
+        <text x={deskX + 38} y={deskY + 28} textAnchor="middle" fontSize={10} fill={COLORS.textAmber} fontFamily="monospace">
+          ...
         </text>
       )}
       {station.status === "done" && (
-        <text x={deskX + 112} y={deskY + 56} textAnchor="middle" fontSize={24} fill={COLORS.textGreen} fontFamily="monospace">
+        <text x={deskX + 38} y={deskY + 28} textAnchor="middle" fontSize={14} fill={COLORS.textGreen} fontFamily="monospace">
           ✓
         </text>
       )}
       {station.status === "error" && (
-        <text x={deskX + 112} y={deskY + 56} textAnchor="middle" fontSize={24} fill={COLORS.textRed} fontFamily="monospace">
+        <text x={deskX + 38} y={deskY + 28} textAnchor="middle" fontSize={14} fill={COLORS.textRed} fontFamily="monospace">
           ✗
         </text>
       )}
       {Array.from({ length: 6 }).map((_, key) => (
-        <rect key={key} x={deskX + 87 + key * 8} y={deskY + 106} width={5} height={5} fill={station.status === "running" && (frame + key) % 6 === 0 ? COLORS.textBlue : "#3a332d"} rx={1} />
+        <rect key={key} x={deskX + 27 + key * 3} y={deskY + 47} width={2} height={2} fill={station.status === "running" && (frame + key) % 6 === 0 ? COLORS.textBlue : "#3a332d"} rx={1} />
       ))}
-      <text x={rect.x + 18} y={rect.y + 22} fontSize={14} fill={station.kind === "route" ? COLORS.textBlue : COLORS.text} fontFamily="monospace" fontWeight={700}>
-        {station.kind === "route" ? "conversation desk" : "task desk"}
-      </text>
-      <text x={rect.x + 18} y={rect.y + 182} fontSize={14} fill={COLORS.text} fontFamily="monospace">
-        {station.label.length > 30 ? `${station.label.slice(0, 30)}...` : station.label}
-      </text>
-      <text x={rect.x + 18} y={rect.y + 200} fontSize={11} fill={toneColor(station.status)} fontFamily="monospace">
-        {station.subtitle.length > 42 ? `${station.subtitle.slice(0, 42)}...` : station.subtitle}
-      </text>
     </g>
   );
 }
@@ -693,8 +764,31 @@ export function PixelOfficeScene({
         {agents.map((agent) => (
           <g key={agent.id}>
             <PixelOfficeChar x={agent.x} y={agent.y} color={agent.color} anim={agent.anim} frame={frame} flip={agent.flip} size={1.05} />
-            <rect x={agent.x - 42} y={agent.y + 10} width={84} height={16} fill="#0d1117" rx={3} opacity={0.82} />
-            <text x={agent.x} y={agent.y + 22} textAnchor="middle" fontSize={12} fill={COLORS.text} fontFamily="monospace">
+            <rect
+              x={agent.x - 42}
+              y={
+                agent.y >= PIXEL_SCENE_LAYOUT.loungeY && agent.y <= PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight
+                  ? agent.y + 2
+                  : agent.y + 10
+              }
+              width={84}
+              height={16}
+              fill="#0d1117"
+              rx={3}
+              opacity={0.82}
+            />
+            <text
+              x={agent.x}
+              y={
+                agent.y >= PIXEL_SCENE_LAYOUT.loungeY && agent.y <= PIXEL_SCENE_LAYOUT.loungeY + PIXEL_SCENE_LAYOUT.loungeHeight
+                  ? agent.y + 14
+                  : agent.y + 22
+              }
+              textAnchor="middle"
+              fontSize={12}
+              fill={COLORS.text}
+              fontFamily="monospace"
+            >
               @{agent.label.length > 10 ? `${agent.label.slice(0, 10)}...` : agent.label}
             </text>
           </g>
