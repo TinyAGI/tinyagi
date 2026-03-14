@@ -4,6 +4,14 @@
 
 # Start daemon
 start_daemon() {
+    # Parse flags
+    local skip_setup=false
+    for arg in "$@"; do
+        case "$arg" in
+            --skip-setup) skip_setup=true ;;
+        esac
+    done
+
     if session_exists; then
         echo -e "${YELLOW}Session already running${NC}"
         return 1
@@ -65,6 +73,13 @@ start_daemon() {
             return 1
         fi
     elif [ $load_rc -ne 0 ]; then
+        if [ "$skip_setup" = true ]; then
+            # --skip-setup: start API server only, let user complete setup via web
+            echo -e "${YELLOW}No configuration found. Starting API server for web setup...${NC}"
+            echo ""
+            _start_server_only
+            return
+        fi
         echo -e "${YELLOW}No configuration found. Running setup wizard...${NC}"
         echo ""
         node "$SCRIPT_DIR/packages/cli/dist/setup-wizard.js"
@@ -246,6 +261,25 @@ start_daemon() {
     local ch_list
     ch_list=$(IFS=','; echo "${ACTIVE_CHANNELS[*]}")
     log "Daemon started with $total_panes panes (channels=$ch_list)"
+}
+
+# Start API server only (--skip-setup mode, no settings yet)
+_start_server_only() {
+    # Ensure TINYCLAW_HOME directories exist so the server can write settings
+    mkdir -p "$TINYCLAW_HOME/logs"
+    mkdir -p "$TINYCLAW_HOME/files"
+
+    echo -e "${GREEN}✓ API server starting on http://localhost:${TINYCLAW_API_PORT:-3777}${NC}"
+    echo ""
+    echo -e "Complete setup in your browser:"
+    echo -e "  ${BLUE}http://localhost:3000/setup${NC}  (TinyOffice)"
+    echo -e "  or run: ${BLUE}tinyclaw office${NC}"
+    echo ""
+    echo -e "Once setup is complete, restart with: ${BLUE}tinyclaw restart${NC}"
+    echo ""
+
+    log "Starting API server in skip-setup mode (no settings)"
+    cd "$SCRIPT_DIR" && exec node packages/main/dist/index.js
 }
 
 # Stop daemon
