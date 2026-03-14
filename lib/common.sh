@@ -12,10 +12,9 @@ NC='\033[0m'
 
 # --- ASCII Banner ---
 show_banner() {
-    echo -e "${BLUE}"
     echo '  ▀█▀ █ █▄ █ █▄█ ▄▀█ █▀▀ █'
     echo '   █  █ █ ▀█  █  █▀█ █▄█ █'
-    echo -e "${NC}"
+    echo ""
 }
 
 # --- Channel registry ---
