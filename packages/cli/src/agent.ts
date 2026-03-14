@@ -73,6 +73,11 @@ async function agentAdd() {
         agentModel = await promptModel(agentProvider);
     }
 
+    const systemPrompt = unwrap(await p.text({
+        message: "System prompt (written to AGENTS.md, optional)",
+        placeholder: 'optional',
+    })) || '';
+
     const workspacePath = settings.workspace?.path || path.join(process.env.HOME || '~', 'tinyclaw-workspace');
     const agentWorkdir = path.join(workspacePath, agentId);
 
@@ -86,6 +91,10 @@ async function agentAdd() {
     writeSettings(settings);
 
     ensureAgentDirectory(agentWorkdir);
+
+    if (systemPrompt) {
+        fs.writeFileSync(path.join(agentWorkdir, 'AGENTS.md'), systemPrompt, 'utf8');
+    }
 
     p.log.success(`Agent '${agentId}' created!`);
     p.log.info(`Directory: ${agentWorkdir}`);

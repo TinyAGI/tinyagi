@@ -68,6 +68,9 @@ app.put('/api/agents/:id', async (c) => {
     if (isNew) {
         try {
             ensureAgentDirectory(workingDir);
+            if (body.system_prompt) {
+                fs.writeFileSync(path.join(workingDir, 'AGENTS.md'), body.system_prompt, 'utf8');
+            }
             log('INFO', `[API] Agent '${agentId}' provisioned at ${workingDir}`);
         } catch (err) {
             log('ERROR', `[API] Agent '${agentId}' provisioning failed: ${(err as Error).message}`);

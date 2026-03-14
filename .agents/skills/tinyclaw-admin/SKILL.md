@@ -79,6 +79,11 @@ curl -s -X PUT http://localhost:3777/api/agents/coder \
   -H 'Content-Type: application/json' \
   -d '{"name":"Coder","provider":"anthropic","model":"sonnet"}'
 
+# Create agent with a system prompt (written to AGENTS.md in workspace on provisioning)
+curl -s -X PUT http://localhost:3777/api/agents/coder \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Coder","provider":"anthropic","model":"sonnet","system_prompt":"You are a senior engineer. Always write tests."}'
+
 # Optional fields: working_directory, system_prompt, prompt_file
 
 # Delete agent
