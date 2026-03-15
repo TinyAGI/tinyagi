@@ -3,20 +3,26 @@
     "jobs": {
       "name": "Jobs",
       "provider": "anthropic",
-      "model": "sonnet",
+      "model": "claude-haiku-4-5-20251001",
       "working_directory": "/home/josh/workspace/.tinyclaw/jobs"
     },
     "fitness": {
       "name": "Fitness",
       "provider": "anthropic",
-      "model": "sonnet",
+      "model": "claude-haiku-4-5-20251001",
       "working_directory": "/home/josh/workspace/.tinyclaw/fitness"
     },
     "content": {
       "name": "Content",
       "provider": "anthropic",
-      "model": "sonnet",
+      "model": "claude-sonnet-4-6",
       "working_directory": "/home/josh/workspace/.tinyclaw/content"
+    },
+    "main": {
+      "name": "Main",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "working_directory": "/home/josh/workspace/.tinyclaw/main"
     }
   }
 }
