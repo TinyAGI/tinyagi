@@ -202,7 +202,7 @@ After editing `settings.json`, run `tinyclaw restart` to pick up changes.
 
 ## POST /api/setup is for initial setup only
 
-`POST /api/setup` **fully replaces** settings.json — it does not merge. It will be rejected with HTTP 409 if agents are already configured, unless `?force=true` is passed. Agents must never call this endpoint on a running system.
+`POST /api/setup` **fully replaces** settings.json — it does not merge. It will be rejected with HTTP 409 if agents are already configured. There is no override. To modify a running system, use `PUT /api/agents/:id`, `PUT /api/teams/:id`, or `PUT /api/settings`.
 
 ## Modifying TinyClaw source code
 
