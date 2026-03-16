@@ -185,7 +185,7 @@ export default function AgentConfigPage({
     } finally {
       setHbSaving(false);
     }
-  }, [agent, agentId, heartbeatContent, heartbeatInterval, settings]);
+  }, [agent, agentId, heartbeatContent, heartbeatEnabled, heartbeatInterval, settings]);
 
   const refreshWorkspaceData = useCallback(() => {
     getAgentSkills(agentId)

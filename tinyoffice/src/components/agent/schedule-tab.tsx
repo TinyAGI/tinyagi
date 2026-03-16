@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -262,51 +262,52 @@ export function ScheduleTab({ agentId }: { agentId: string }) {
   };
 
   // Convert schedules to calendar data
-  const calendarData: CalendarData[] = [];
-  const dayMap = new Map<string, CalendarData>();
+  const calendarData = useMemo(() => {
+    const dayMap = new Map<string, CalendarData>();
 
-  for (const s of schedules) {
-    if (!s.enabled) continue;
+    for (const s of schedules) {
+      if (!s.enabled) continue;
 
-    if (s.runAt) {
-      const occ = new Date(s.runAt);
-      const key = occ.toDateString();
-      if (!dayMap.has(key)) {
-        dayMap.set(key, { day: new Date(occ.getFullYear(), occ.getMonth(), occ.getDate()), events: [] });
+      if (s.runAt) {
+        const occ = new Date(s.runAt);
+        const key = occ.toDateString();
+        if (!dayMap.has(key)) {
+          dayMap.set(key, { day: new Date(occ.getFullYear(), occ.getMonth(), occ.getDate()), events: [] });
+        }
+        const hours = occ.getHours();
+        const mins = occ.getMinutes();
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const h12 = hours % 12 || 12;
+        dayMap.get(key)!.events.push({
+          id: s.id,
+          name: s.label || s.message.slice(0, 40),
+          time: `${h12}:${String(mins).padStart(2, "0")} ${ampm}`,
+          datetime: occ.toISOString(),
+        });
+        continue;
       }
-      const hours = occ.getHours();
-      const mins = occ.getMinutes();
-      const ampm = hours >= 12 ? "PM" : "AM";
-      const h12 = hours % 12 || 12;
-      dayMap.get(key)!.events.push({
-        id: s.id,
-        name: s.label || s.message.slice(0, 40),
-        time: `${h12}:${String(mins).padStart(2, "0")} ${ampm}`,
-        datetime: occ.toISOString(),
-      });
-      continue;
-    }
 
-    const occurrences = cronNextOccurrences(s.cron, 60);
-    for (const occ of occurrences) {
-      const key = occ.toDateString();
-      if (!dayMap.has(key)) {
-        dayMap.set(key, { day: new Date(occ.getFullYear(), occ.getMonth(), occ.getDate()), events: [] });
+      const occurrences = cronNextOccurrences(s.cron, 60);
+      for (const occ of occurrences) {
+        const key = occ.toDateString();
+        if (!dayMap.has(key)) {
+          dayMap.set(key, { day: new Date(occ.getFullYear(), occ.getMonth(), occ.getDate()), events: [] });
+        }
+        const hours = occ.getHours();
+        const mins = occ.getMinutes();
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const h12 = hours % 12 || 12;
+        const timeStr = `${h12}:${String(mins).padStart(2, "0")} ${ampm}`;
+        dayMap.get(key)!.events.push({
+          id: `${s.id}-${occ.getTime()}`,
+          name: s.label || s.message.slice(0, 40),
+          time: timeStr,
+          datetime: occ.toISOString(),
+        });
       }
-      const hours = occ.getHours();
-      const mins = occ.getMinutes();
-      const ampm = hours >= 12 ? "PM" : "AM";
-      const h12 = hours % 12 || 12;
-      const timeStr = `${h12}:${String(mins).padStart(2, "0")} ${ampm}`;
-      dayMap.get(key)!.events.push({
-        id: `${s.id}-${occ.getTime()}`,
-        name: s.label || s.message.slice(0, 40),
-        time: timeStr,
-        datetime: occ.toISOString(),
-      });
     }
-  }
-  calendarData.push(...dayMap.values());
+    return [...dayMap.values()];
+  }, [schedules]);
 
   if (loading) {
     return (

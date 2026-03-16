@@ -46,7 +46,6 @@ export function ChatRoomView({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const lastIdRef = { current: 0 };
 
   const fetchMessages = useCallback(async () => {
     const msgs = await getChatMessages(teamId, 200, 0);
@@ -58,8 +57,6 @@ export function ChatRoomView({
   useEffect(() => {
     if (polledMessages) {
       setMessages(polledMessages);
-      const maxId = polledMessages.reduce((max, m) => Math.max(max, m.id), 0);
-      lastIdRef.current = maxId;
     }
   }, [polledMessages]);
 
