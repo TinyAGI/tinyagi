@@ -11,7 +11,7 @@ const FAIL_THRESHOLD = 3; // consecutive failures before redirecting
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const hideSidebar = pathname === "/setup" || pathname === "/connect";
+  const hideSidebar = pathname === "/setup";
   const failCount = useRef(0);
 
   const { data: connected, loading } = usePolling(checkConnection, 5000);
@@ -20,8 +20,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (loading) return;
     if (connected === false) {
       failCount.current += 1;
-      if (failCount.current >= FAIL_THRESHOLD && pathname !== "/connect") {
-        router.replace("/connect");
+      if (failCount.current >= FAIL_THRESHOLD && pathname !== "/settings") {
+        router.replace("/settings");
       }
     } else {
       failCount.current = 0;

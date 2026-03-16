@@ -27,8 +27,8 @@ export function Sidebar() {
     <aside className="flex h-screen w-64 flex-col border-r bg-card">
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 pt-4 pb-2">
-        <Image src="/icon.png" alt="TinyOffice" width={24} height={24} className="h-6 w-6" />
-        <span className="text-base font-bold tracking-tight">TinyOffice</span>
+        <Image src="/icon.png" alt="TinyAGI" width={24} height={24} className="h-6 w-6" />
+        <span className="text-base font-bold tracking-tight">TinyAGI</span>
       </div>
 
       {/* Dashboard + Logs */}

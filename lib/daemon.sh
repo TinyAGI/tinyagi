@@ -91,6 +91,11 @@ start_daemon() {
     fi
 
     if [ ${#ACTIVE_CHANNELS[@]} -eq 0 ]; then
+        if [ "$skip_setup" = true ]; then
+            # Settings exist but no channels — start API-only mode
+            _start_server_only
+            return
+        fi
         echo -e "${RED}No channels configured. Run 'tinyclaw setup' to reconfigure${NC}"
         return 1
     fi

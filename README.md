@@ -54,12 +54,21 @@ We are actively looking for contributors. Please reach out.
 - [Claude Code CLI](https://claude.com/claude-code) (for Anthropic provider)
 - [Codex CLI](https://docs.openai.com/codex) (for OpenAI provider)
 
-### Installation
+### Installation & First Run
 
-**Option 1: One-line Install (Recommended)**
+**Option 1: npx (Recommended)**
+
+```bash
+npx tinyagi
+```
+
+This installs TinyClaw, creates a default workspace and agent, starts the API server, and opens the web setup portal where you can configure channels, providers, and agents from your browser.
+
+**Option 2: One-line Install**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/TinyAGI/tinyclaw/main/scripts/remote-install.sh | bash
+tinyclaw start  # Runs interactive setup wizard
 ```
 
 <details>
@@ -80,15 +89,17 @@ git clone https://github.com/TinyAGI/tinyclaw.git
 cd tinyclaw && npm install && ./scripts/install.sh
 ```
 
-</details>
-
-### First Run
+**Web-based setup (skip CLI wizard):**
 
 ```bash
-tinyclaw start  # Runs interactive setup wizard
+tinyclaw start --skip-setup  # Starts API server only
+# Then open https://office.tinyagicompany.com or run: tinyclaw office
+# After setup, restart to enable channels: tinyclaw restart
 ```
 
-The setup wizard will guide you through channel selection, bot tokens, workspace setup, default agent, AI provider, model selection, and heartbeat interval.
+</details>
+
+The setup wizard (CLI or web) will guide you through channel selection, bot tokens, workspace setup, default agent, AI provider, model selection, and heartbeat interval.
 
 <details>
 <summary><b>📱 Channel Setup Guides</b></summary>
@@ -190,7 +201,7 @@ Commands work with `tinyclaw` (if CLI installed) or `./tinyclaw.sh` (direct scri
 
 | Command       | Description                                               | Example               |
 | ------------- | --------------------------------------------------------- | --------------------- |
-| `start`       | Start TinyClaw daemon                                     | `tinyclaw start`      |
+| `start [--skip-setup]` | Start TinyClaw daemon (--skip-setup: API only, setup via web) | `tinyclaw start` |
 | `stop`        | Stop all processes                                        | `tinyclaw stop`       |
 | `restart`     | Restart TinyClaw                                          | `tinyclaw restart`    |
 | `status`      | Show current status and activity                          | `tinyclaw status`     |

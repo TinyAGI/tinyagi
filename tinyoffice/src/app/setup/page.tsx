@@ -78,6 +78,7 @@ export default function SetupPage() {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
 
   // Form state
   const [enabledChannels, setEnabledChannels] = useState<string[]>([]);
@@ -85,7 +86,7 @@ export default function SetupPage() {
   const [provider, setProvider] = useState("anthropic");
   const [model, setModel] = useState("sonnet");
   const [heartbeat, setHeartbeat] = useState("3600");
-  const [workspaceName, setWorkspaceName] = useState("tinyclaw-workspace");
+  const [workspaceName, setWorkspaceName] = useState("tinyagi-workspace");
   const [agents, setAgents] = useState<SetupAgent[]>([
     { id: "assistant", name: "Assistant", provider: "anthropic", model: "sonnet" },
   ]);
@@ -100,7 +101,7 @@ export default function SetupPage() {
   const canNext = (): boolean => {
     switch (step) {
       case 0:
-        return enabledChannels.length > 0 && missingTokenChannels.length === 0;
+        return missingTokenChannels.length === 0;
       case 1:
         return !!provider && !!model;
       case 2:
@@ -189,13 +190,45 @@ export default function SetupPage() {
       setError("");
       const settings = buildSettings();
       await runSetup(settings);
-      router.push("/");
+      setDone(true);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSaving(false);
     }
   };
+
+  if (done) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto space-y-6">
+        <div className="text-center space-y-4 py-8">
+          <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
+          <h1 className="text-2xl font-bold tracking-tight">Setup Complete</h1>
+          <p className="text-muted-foreground">
+            Your configuration has been saved.
+          </p>
+          {enabledChannels.length > 0 ? (
+            <div className="bg-muted rounded-md p-4 text-sm space-y-2 text-left max-w-sm mx-auto">
+              <p className="font-medium">Restart to enable channels:</p>
+              <pre className="bg-background rounded px-2 py-1 text-xs">tinyclaw restart</pre>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No channels configured. You can add channels later from Settings.
+            </p>
+          )}
+          <div className="flex items-center justify-center gap-3 pt-4">
+            <Link href="/settings">
+              <Button variant="outline">Settings</Button>
+            </Link>
+            <Link href="/">
+              <Button>Go to Dashboard</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 max-w-2xl mx-auto space-y-6">
@@ -205,7 +238,7 @@ export default function SetupPage() {
           Setup
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Configure TinyClaw in a few steps
+          Configure TinyAGI in a few steps
         </p>
       </div>
 
@@ -234,7 +267,7 @@ export default function SetupPage() {
           {step === 0 && (
             <>
               <CardTitle className="text-sm">Messaging Channels</CardTitle>
-              <CardDescription>Select which channels to enable.</CardDescription>
+              <CardDescription>Select which channels to enable. You can skip this and add channels later.</CardDescription>
               <div className="space-y-3 pt-2">
                 {CHANNELS.map((ch) => (
                   <div key={ch.id} className="space-y-2">
@@ -314,7 +347,7 @@ export default function SetupPage() {
                 <Input
                   value={workspaceName}
                   onChange={(e) => setWorkspaceName(e.target.value)}
-                  placeholder="tinyclaw-workspace"
+                  placeholder="tinyagi-workspace"
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">

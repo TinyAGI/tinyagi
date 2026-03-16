@@ -3,8 +3,8 @@ import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
-  title: "TinyOffice | Agent teams orchestrator",
-  description: "Agent teams orchestrator",
+  title: "TinyAGI | The AI Company Emulator",
+  description: "The AI Company Emulator",
 };
 
 export default function RootLayout({

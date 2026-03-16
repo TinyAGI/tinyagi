@@ -21,7 +21,7 @@ export function setApiBase(url: string | null): void {
   }
 }
 
-/** Check if the TinyClaw API is reachable at the given (or current) base URL. */
+/** Check if the TinyAGI API is reachable at the given (or current) base URL. */
 export async function checkConnection(baseUrl?: string): Promise<boolean> {
   const base = baseUrl ?? getApiBase();
   try {
