@@ -54,6 +54,19 @@ function normalizeMessage(message: AgentMessage, agentId: string): AgentChatItem
   };
 }
 
+const AGENT_COLORS = [
+  "bg-blue-500", "bg-emerald-500", "bg-purple-500", "bg-orange-500",
+  "bg-pink-500", "bg-cyan-500", "bg-yellow-500", "bg-red-500",
+];
+
+function agentColor(agentId: string): string {
+  let hash = 0;
+  for (let i = 0; i < agentId.length; i++) {
+    hash = ((hash << 5) - hash + agentId.charCodeAt(i)) | 0;
+  }
+  return AGENT_COLORS[Math.abs(hash) % AGENT_COLORS.length];
+}
+
 export function AgentChatView({
   agentId,
   agentName,
@@ -164,7 +177,7 @@ export function AgentChatView({
                   <div
                     className={cn(
                       "flex h-8 w-8 items-center justify-center text-[10px] font-bold uppercase shrink-0",
-                      isUser ? "bg-primary text-primary-foreground" : "bg-emerald-500 text-white"
+                      isUser ? "bg-primary text-primary-foreground" : `${agentColor(agentId)} text-white`
                     )}
                   >
                     {isUser ? "You" : initials}

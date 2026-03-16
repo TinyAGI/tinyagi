@@ -16,6 +16,7 @@ import {
   type Settings,
   type WorkspaceSkill,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,19 @@ import {
   CalendarDays,
   ArrowLeft,
 } from "lucide-react";
+
+const AGENT_COLORS = [
+  "bg-blue-500", "bg-emerald-500", "bg-purple-500", "bg-orange-500",
+  "bg-pink-500", "bg-cyan-500", "bg-yellow-500", "bg-red-500",
+];
+
+function agentColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
+  }
+  return AGENT_COLORS[Math.abs(hash) % AGENT_COLORS.length];
+}
 import Link from "next/link";
 
 type TabId = "chat" | "skills" | "schedule" | "system-prompt" | "memory" | "heartbeat";
@@ -231,7 +245,7 @@ export default function AgentConfigPage({
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center bg-primary/10 text-primary text-sm font-bold uppercase">
+            <div className={cn("flex h-10 w-10 items-center justify-center text-white text-sm font-bold uppercase", agentColor(agentId))}>
               {agent.name.slice(0, 2)}
             </div>
             <div>
