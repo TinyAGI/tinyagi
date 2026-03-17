@@ -235,6 +235,11 @@ export default function OfficePage() {
   const rootSessionsRef = useRef(new Map<string, { startedAt: number; agentIds: Set<string>; completedAt?: number }>());
   const openRootOrderRef = useRef<string[]>([]);
 
+  const setConversationFilterAndStick = useCallback((nextFilter: string) => {
+    conversationStickToBottomRef.current = true;
+    setConversationFilter(nextFilter);
+  }, []);
+
   useEffect(() => {
     const interval = window.setInterval(() => {
       setClock((current) => ({ now: Date.now(), frame: current.frame + 1 }));
@@ -608,7 +613,7 @@ export default function OfficePage() {
     });
 
     return assignments;
-  }, [activeTasks, latestRelevantBubbleByAgent, clock.now, agents, teams, agentEntries, agentWorkSessions]);
+  }, [activeTasks, latestRelevantBubbleByAgent, latestResponseByAgent, clock.now, agents, teams, agentEntries, agentWorkSessions]);
 
   const sceneAgents = useMemo<SceneAgent[]>(() => {
     return agentEntries.map(([agentId], index) => {
@@ -757,17 +762,6 @@ export default function OfficePage() {
   );
 
   const archiveRoomModel = useMemo<SceneArchiveRoom>(() => ({ label: "Archives" }), []);
-
-  const activeWorkers = sceneAgents.filter((agent) => agent.anim === "type" || agent.anim === "walk").length;
-  const statusLabel = sending
-    ? "dispatching new message"
-    : queueSnapshot.processing > 0
-      ? `${queueSnapshot.processing} chains running · ${activeWorkers} agents in motion`
-      : activeTasks.length > 0
-        ? `${activeTasks.length} active tasks on the floor`
-        : connected
-          ? "floor is live and waiting"
-          : "waiting for live event stream";
 
   const overlayBubbles = useMemo<OverlayBubble[]>(() => {
     const items: OverlayBubble[] = [];
@@ -1041,7 +1035,7 @@ export default function OfficePage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setConversationFilter("all")}
+                  onClick={() => setConversationFilterAndStick("all")}
                   className={`border px-3 py-1.5 font-mono text-[10px] transition ${
                     conversationFilter === "all"
                       ? "border-[#465e14] bg-[#111111] text-[#a3e635]"
@@ -1054,7 +1048,7 @@ export default function OfficePage() {
                   <button
                     key={agentId}
                     type="button"
-                    onClick={() => setConversationFilter(agentId)}
+                    onClick={() => setConversationFilterAndStick(agentId)}
                     className={`border px-3 py-1.5 font-mono text-[10px] transition ${
                       conversationFilter === agentId
                         ? "border-[#465e14] bg-[#111111] text-[#a3e635]"

@@ -214,17 +214,6 @@ export default function SettingsPage() {
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function ReviewItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-      <p className="text-sm font-medium">{value}</p>
-    </div>
-  );
-}
-
 function OverviewCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string }) {
   return (
     <Card>
