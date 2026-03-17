@@ -34,7 +34,7 @@ app.post('/api/message', async (c) => {
         return c.json({ error: 'duplicate messageId', messageId }, 409);
     }
 
-    log('INFO', `[API] Message enqueued: ${message.substring(0, 60)}...`);
+    log('INFO', `[API] Message enqueued: ${message}`);
     emitEvent('message_enqueued', {
         messageId,
         agent: agent || null,

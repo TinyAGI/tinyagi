@@ -52,7 +52,7 @@ async function processMessage(dbMsg: any): Promise<void> {
     const { channel, sender, message: rawMessage, messageId, agent: preRoutedAgent } = data;
     const isInternal = !!data.fromAgent;
 
-    log('INFO', `Processing [${isInternal ? 'internal' : channel}] ${isInternal ? `@${data.fromAgent}→@${preRoutedAgent}` : `from ${sender}`}: ${rawMessage.substring(0, 50)}...`);
+    log('INFO', `Processing [${isInternal ? 'internal' : channel}] ${isInternal ? `@${data.fromAgent}→@${preRoutedAgent}` : `from ${sender}`}: ${rawMessage}`);
     if (!isInternal) {
         emitEvent('message_received', { channel, sender, message: rawMessage.substring(0, 120), messageId });
     }
@@ -86,7 +86,6 @@ async function processMessage(dbMsg: any): Promise<void> {
     }
 
     const agent = agents[agentId];
-    log('INFO', `Routing to agent: ${agent.name} (${agentId}) [${agent.provider}/${agent.model}]`);
     if (!isInternal) {
         emitEvent('agent_routed', { agentId, agentName: agent.name, provider: agent.provider, model: agent.model, isTeamRouted });
     }

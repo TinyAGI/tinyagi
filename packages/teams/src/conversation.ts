@@ -96,9 +96,8 @@ export async function handleTeamResponse(params: {
     // Extract teammate mentions and enqueue as flat DMs
     const teammateMentions = extractTeammateMentions(response, agentId, teamContext.teamId, teams, agents);
     if (teammateMentions.length > 0) {
-        log('INFO', `Teammate mentions from @${agentId}: ${teammateMentions.map(m => `@${m.teammateId}`).join(', ')}`);
+        log('INFO', `@${agentId} → ${teammateMentions.map(m => `@${m.teammateId}`).join(', ')}`);
         for (const mention of teammateMentions) {
-            log('INFO', `@${agentId} → @${mention.teammateId}`);
             emitEvent('chain_handoff', { teamId: teamContext.teamId, fromAgent: agentId, toAgent: mention.teammateId });
 
             const internalMsg = `[Message from teammate @${agentId}]:\n${mention.message}`;

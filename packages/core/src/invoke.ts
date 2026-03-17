@@ -122,7 +122,7 @@ export async function invokeAgent(
     const effectiveModel = agent.model || customProvider?.model || '';
 
     if (provider === 'openai') {
-        log('INFO', `Using Codex CLI (agent: ${agentId})`);
+        log('DEBUG', `Using Codex CLI (agent: ${agentId})`);
 
         const shouldResume = !shouldReset;
 
@@ -166,7 +166,7 @@ export async function invokeAgent(
         // Model passed via --model in provider/model format (e.g. opencode/claude-sonnet-4-5).
         // Supports -c flag for conversation continuation (resumes last session).
         const modelId = resolveOpenCodeModel(effectiveModel);
-        log('INFO', `Using OpenCode CLI (agent: ${agentId}, model: ${modelId})`);
+        log('DEBUG', `Using OpenCode CLI (agent: ${agentId}, model: ${modelId})`);
 
         const continueConversation = !shouldReset;
 
@@ -217,7 +217,7 @@ export async function invokeAgent(
         return response || 'Sorry, I could not generate a response from OpenCode.';
     } else {
         // Default to Claude (Anthropic)
-        log('INFO', `Using Claude provider (agent: ${agentId})`);
+        log('DEBUG', `Using Claude provider (agent: ${agentId})`);
 
         const continueConversation = !shouldReset;
 
