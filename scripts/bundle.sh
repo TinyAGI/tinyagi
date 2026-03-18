@@ -97,7 +97,7 @@ cp .gitignore "$BUNDLE_DIR/"
 
 # Make scripts executable
 chmod +x "$BUNDLE_DIR/bin/tinyagi"
-chmod +x "$BUNDLE_DIR/bin/tinyagi"
+chmod +x "$BUNDLE_DIR/bin/tinyclaw"
 chmod +x "$BUNDLE_DIR/tinyagi.sh"
 chmod +x "$BUNDLE_DIR/scripts/install.sh"
 chmod +x "$BUNDLE_DIR/scripts/bundle.sh"
