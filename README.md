@@ -71,12 +71,6 @@ The setup wizard will guide you through channel selection, bot tokens, workspace
 <details>
 <summary><b>Other installation methods</b></summary>
 
-**npx:**
-
-```bash
-npx tinyagi
-```
-
 **From Source:**
 
 ```bash
@@ -371,7 +365,7 @@ These commands work in Discord, Telegram, and WhatsApp:
 > **Note:** If you are on v0.0.1 or v0.0.2, the update script was broken. Please re-install instead:
 >
 > ```bash
-> npx tinyagi install
+> curl -fsSL https://raw.githubusercontent.com/TinyAGI/tinyagi/main/scripts/install.sh | bash
 > ```
 >
 > Your settings and user data will be preserved.
