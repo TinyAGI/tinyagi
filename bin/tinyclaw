@@ -1,4 +1,26 @@
 #!/bin/bash
-# Backwards-compatibility shim: tinyclaw → tinyagi
-echo "Note: 'tinyclaw' has been renamed to 'tinyagi'. Please use 'tinyagi' instead."
-exec "$(dirname "$0")/tinyagi" "$@"
+# TinyClaw CLI Wrapper (backward compatibility)
+# Delegates to tinyagi — the primary CLI entrypoint
+
+# Resolve the real installation directory (follow symlinks)
+TINYCLAW_BIN="$0"
+
+# Follow symlinks to find the real script location
+while [ -L "$TINYCLAW_BIN" ]; do
+    TINYCLAW_DIR="$(cd "$(dirname "$TINYCLAW_BIN")" && pwd)"
+    TINYCLAW_BIN="$(readlink "$TINYCLAW_BIN")"
+    # Handle relative symlinks
+    [[ "$TINYCLAW_BIN" != /* ]] && TINYCLAW_BIN="$TINYCLAW_DIR/$TINYCLAW_BIN"
+done
+
+# Get the directory where this wrapper is located
+TINYCLAW_DIR="$(cd "$(dirname "$TINYCLAW_BIN")" && pwd)"
+
+# The actual installation is one directory up from bin/
+REPO_ROOT="$(dirname "$TINYCLAW_DIR")"
+
+# Installed CLI always uses ~/.tinyclaw for data
+export TINYCLAW_HOME="$HOME/.tinyclaw"
+
+# Delegate to tinyagi entrypoint
+exec node "$REPO_ROOT/packages/tinyagi/bin/tinyagi.mjs" "$@"

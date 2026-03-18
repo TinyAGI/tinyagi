@@ -4,11 +4,20 @@
 
 # Start daemon
 start_daemon() {
+    # Parse flags
+    local skip_setup=false
+    for arg in "$@"; do
+        case "$arg" in
+            --skip-setup) skip_setup=true ;;
+        esac
+    done
+
     if session_exists; then
         echo -e "${YELLOW}Session already running${NC}"
         return 1
     fi
 
+    show_banner
     log "Starting TinyAGI daemon..."
 
     # Check if Node.js dependencies are installed
@@ -65,6 +74,13 @@ start_daemon() {
             return 1
         fi
     elif [ $load_rc -ne 0 ]; then
+        if [ "$skip_setup" = true ]; then
+            # --skip-setup: start API server only, let user complete setup via web
+            echo -e "${YELLOW}No configuration found. Starting API server for web setup...${NC}"
+            echo ""
+            _start_server_only
+            return
+        fi
         echo -e "${YELLOW}No configuration found. Running setup wizard...${NC}"
         echo ""
         node "$SCRIPT_DIR/packages/cli/dist/setup-wizard.js"
@@ -76,6 +92,11 @@ start_daemon() {
     fi
 
     if [ ${#ACTIVE_CHANNELS[@]} -eq 0 ]; then
+        if [ "$skip_setup" = true ]; then
+            # Settings exist but no channels — start API-only mode
+            _start_server_only
+            return
+        fi
         echo -e "${RED}No channels configured. Run 'tinyagi setup' to reconfigure${NC}"
         return 1
     fi
@@ -248,6 +269,181 @@ start_daemon() {
     log "Daemon started with $total_panes panes (channels=$ch_list)"
 }
 
+# Start queue processor + API server only (--skip-setup mode, no settings yet).
+# Creates a proper tmux session so tinyagi stop/restart still work.
+_start_server_only() {
+    # Ensure TINYAGI_HOME directories exist so the server can write settings
+    mkdir -p "$TINYAGI_HOME/logs"
+    mkdir -p "$TINYAGI_HOME/files"
+
+    # Create tmux session with a single queue-processor pane
+    tmux new-session -d -s "$TMUX_SESSION" -n "tinyagi" -c "$SCRIPT_DIR"
+
+    local win_base
+    win_base=$(tmux show-option -gv base-index 2>/dev/null || echo 0)
+    local pane_base
+    pane_base=$(tmux show-option -gv pane-base-index 2>/dev/null || echo 0)
+
+    sleep 2
+    tmux send-keys -t "$TMUX_SESSION:${win_base}.$pane_base" "cd '$SCRIPT_DIR' && node packages/main/dist/index.js" C-m
+    tmux select-pane -t "$TMUX_SESSION:${win_base}.$pane_base" -T "Queue"
+
+    echo -e "${GREEN}✓ TinyAGI started (setup mode — no channels)${NC}"
+    echo ""
+    echo -e "API server: ${BLUE}http://localhost:${TINYAGI_API_PORT:-3777}${NC}"
+    echo ""
+    echo -e "Complete setup in your browser:"
+    echo -e "  ${BLUE}http://localhost:3000/setup${NC}  (TinyOffice)"
+    echo -e "  or run: ${BLUE}tinyagi office${NC}"
+    echo ""
+    echo -e "Once setup is complete, restart to enable channels:"
+    echo -e "  ${BLUE}tinyagi restart${NC}"
+    echo ""
+
+    log "Started in skip-setup mode (queue + API only, no channels)"
+}
+
+# ── Granular service management ───────────────────────────────────────────
+
+# Start a single channel in the running tmux session
+start_channel() {
+    local channel="$1"
+    if [ -z "$channel" ]; then
+        echo -e "${RED}Usage: tinyagi channel start <channel_id>${NC}"
+        return 1
+    fi
+
+    # Validate channel exists
+    local valid=false
+    for ch in "${ALL_CHANNELS[@]}"; do
+        [ "$ch" = "$channel" ] && valid=true
+    done
+    if [ "$valid" = false ]; then
+        echo -e "${RED}Unknown channel: $channel${NC}"
+        return 1
+    fi
+
+    if ! session_exists; then
+        echo -e "${RED}No tmux session running. Start TinyAGI first.${NC}"
+        return 1
+    fi
+
+    # Check if pane already exists
+    local existing
+    existing=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_title}' 2>/dev/null | grep -x "$(channel_display "$channel")" || true)
+    if [ -n "$existing" ]; then
+        echo -e "${YELLOW}$(channel_display "$channel") is already running${NC}"
+        return 0
+    fi
+
+    # Write token to .env if needed
+    load_settings 2>/dev/null || true
+    local env_var
+    env_var="$(channel_token_env "$channel")"
+    local token_val
+    token_val="$(get_channel_token "$channel")"
+    if [ -n "$env_var" ] && [ -n "$token_val" ]; then
+        local env_file="$SCRIPT_DIR/.env"
+        # Append or update the token line
+        if [ -f "$env_file" ] && grep -q "^${env_var}=" "$env_file" 2>/dev/null; then
+            sed -i.bak "s|^${env_var}=.*|${env_var}=${token_val}|" "$env_file" && rm -f "${env_file}.bak"
+        else
+            echo "${env_var}=${token_val}" >> "$env_file"
+        fi
+    fi
+
+    # Add pane
+    tmux split-window -t "$TMUX_SESSION" -c "$SCRIPT_DIR"
+    tmux select-layout -t "$TMUX_SESSION" tiled
+    sleep 1
+    # Find the newest pane (highest id) — that's the one we just created
+    local new_pane
+    new_pane=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id}' | tail -1)
+    tmux send-keys -t "$new_pane" "cd '$SCRIPT_DIR' && node $(channel_script "$channel")" C-m
+    tmux select-pane -t "$new_pane" -T "$(channel_display "$channel")"
+
+    echo -e "${GREEN}✓ $(channel_display "$channel") started${NC}"
+    log "Channel $channel started (pane $new_pane)"
+}
+
+# Stop a single channel in the running tmux session
+stop_channel() {
+    local channel="$1"
+    if [ -z "$channel" ]; then
+        echo -e "${RED}Usage: tinyagi channel stop <channel_id>${NC}"
+        return 1
+    fi
+
+    if ! session_exists; then
+        echo -e "${YELLOW}No tmux session running${NC}"
+        return 0
+    fi
+
+    local display
+    display="$(channel_display "$channel")"
+    local pane_id
+    pane_id=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id} #{pane_title}' 2>/dev/null | grep " ${display}$" | awk '{print $1}' | head -1)
+
+    if [ -n "$pane_id" ]; then
+        tmux kill-pane -t "$pane_id" 2>/dev/null || true
+        echo -e "${GREEN}✓ $(channel_display "$channel") stopped${NC}"
+        log "Channel $channel stopped (pane $pane_id)"
+    else
+        echo -e "${YELLOW}$(channel_display "$channel") pane not found${NC}"
+    fi
+
+    # Kill any remaining process as fallback
+    pkill -f "$(channel_script "$channel")" 2>/dev/null || true
+}
+
+# Start heartbeat in the running tmux session
+start_heartbeat() {
+    if ! session_exists; then
+        echo -e "${RED}No tmux session running. Start TinyAGI first.${NC}"
+        return 1
+    fi
+
+    # Check if already running
+    local existing
+    existing=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_title}' 2>/dev/null | grep -x "Heartbeat" || true)
+    if [ -n "$existing" ]; then
+        echo -e "${YELLOW}Heartbeat is already running${NC}"
+        return 0
+    fi
+
+    tmux split-window -t "$TMUX_SESSION" -c "$SCRIPT_DIR"
+    tmux select-layout -t "$TMUX_SESSION" tiled
+    sleep 1
+    local new_pane
+    new_pane=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id}' | tail -1)
+    tmux send-keys -t "$new_pane" "cd '$SCRIPT_DIR' && ./lib/heartbeat-cron.sh" C-m
+    tmux select-pane -t "$new_pane" -T "Heartbeat"
+
+    echo -e "${GREEN}✓ Heartbeat started${NC}"
+    log "Heartbeat started (pane $new_pane)"
+}
+
+# Stop heartbeat in the running tmux session
+stop_heartbeat() {
+    if ! session_exists; then
+        echo -e "${YELLOW}No tmux session running${NC}"
+        return 0
+    fi
+
+    local pane_id
+    pane_id=$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id} #{pane_title}' 2>/dev/null | grep " Heartbeat$" | awk '{print $1}' | head -1)
+
+    if [ -n "$pane_id" ]; then
+        tmux kill-pane -t "$pane_id" 2>/dev/null || true
+        echo -e "${GREEN}✓ Heartbeat stopped${NC}"
+        log "Heartbeat stopped (pane $pane_id)"
+    else
+        echo -e "${YELLOW}Heartbeat pane not found${NC}"
+    fi
+
+    pkill -f "heartbeat-cron.sh" 2>/dev/null || true
+}
+
 # Stop daemon
 stop_daemon() {
     log "Stopping TinyAGI..."
@@ -289,6 +485,7 @@ restart_daemon() {
 
 # Status
 status_daemon() {
+    show_banner
     echo -e "${BLUE}TinyAGI Status${NC}"
     echo "==============="
     echo ""

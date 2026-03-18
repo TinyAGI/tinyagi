@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # TinyAGI CLI Installation Script
+# Creates a 'tinyagi' symlink so the command is available globally.
+# Also creates a 'tinyagi' symlink for backward compatibility.
 
 set -e
 
@@ -14,7 +16,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}TinyAGI CLI Installer${NC}"
-echo "======================"
+echo "====================="
 echo ""
 
 # Check if wrapper exists
@@ -33,54 +35,34 @@ elif [ -d "$HOME/.local/bin" ]; then
     INSTALL_DIR="$HOME/.local/bin"
     echo -e "Installing to: ${GREEN}~/.local/bin${NC} (user)"
 else
-    # Create ~/.local/bin if it doesn't exist
     mkdir -p "$HOME/.local/bin"
     INSTALL_DIR="$HOME/.local/bin"
     echo -e "Installing to: ${GREEN}~/.local/bin${NC} (user, created)"
 fi
 
-# Check if already installed
-if [ -L "$INSTALL_DIR/tinyagi" ]; then
-    EXISTING_TARGET="$(readlink "$INSTALL_DIR/tinyagi")"
-    if [ "$EXISTING_TARGET" = "$WRAPPER" ]; then
-        echo -e "${YELLOW}TinyAGI is already installed at $INSTALL_DIR/tinyagi${NC}"
-        echo ""
-        if [ -t 0 ]; then
-            read -p "Reinstall? (y/N) " -n 1 -r
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "Installation cancelled."
-                exit 0
-            fi
-        fi
-        rm "$INSTALL_DIR/tinyagi"
-    else
-        echo -e "${RED}Warning: $INSTALL_DIR/tinyagi exists but points to a different location${NC}"
-        echo "  Current: $EXISTING_TARGET"
-        echo "  New:     $WRAPPER"
-        echo ""
-        if [ -t 0 ]; then
-            read -p "Replace it? (y/N) " -n 1 -r
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "Installation cancelled."
-                exit 0
-            fi
-        fi
-        rm "$INSTALL_DIR/tinyagi"
+# Install a symlink (removes existing if present)
+install_symlink() {
+    local name="$1"
+    local target="$2"
+
+    if [ -L "$INSTALL_DIR/$name" ]; then
+        rm "$INSTALL_DIR/$name"
+    elif [ -e "$INSTALL_DIR/$name" ]; then
+        echo -e "${RED}Error: $INSTALL_DIR/$name exists but is not a symlink${NC}"
+        echo "Please remove it manually and try again."
+        return 1
     fi
-elif [ -e "$INSTALL_DIR/tinyagi" ]; then
-    echo -e "${RED}Error: $INSTALL_DIR/tinyagi exists but is not a symlink${NC}"
-    echo "Please remove it manually and try again."
-    exit 1
-fi
 
-# Create symlink
+    ln -s "$target" "$INSTALL_DIR/$name"
+    echo -e "  ${GREEN}✓${NC} $name → $target"
+}
+
 echo ""
-echo "Creating symlink..."
-ln -s "$WRAPPER" "$INSTALL_DIR/tinyagi"
-ln -sf "$PROJECT_ROOT/bin/tinyclaw" "$INSTALL_DIR/tinyclaw"
+echo "Creating symlinks..."
+install_symlink "tinyagi" "$WRAPPER"
+install_symlink "tinyagi" "$WRAPPER"  # backward compat
 
+echo ""
 echo -e "${GREEN}✓ TinyAGI CLI installed successfully!${NC}"
 echo ""
 echo "You can now run 'tinyagi' from any directory:"
@@ -94,7 +76,6 @@ echo ""
 if command -v tinyagi &> /dev/null; then
     echo -e "${GREEN}✓ 'tinyagi' command is available${NC}"
 elif [ "$INSTALL_DIR" = "$HOME/.local/bin" ]; then
-    # Determine the user's shell profile
     SHELL_NAME="$(basename "$SHELL")"
     SHELL_PROFILE=""
     case "$SHELL_NAME" in
@@ -111,7 +92,6 @@ elif [ "$INSTALL_DIR" = "$HOME/.local/bin" ]; then
 
     PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
 
-    # Only add if not already present
     if [ -n "$SHELL_PROFILE" ] && ! grep -qF '.local/bin' "$SHELL_PROFILE" 2>/dev/null; then
         echo "" >> "$SHELL_PROFILE"
         echo "# Added by TinyAGI installer" >> "$SHELL_PROFILE"
@@ -119,9 +99,7 @@ elif [ "$INSTALL_DIR" = "$HOME/.local/bin" ]; then
         echo -e "${GREEN}✓ Added ~/.local/bin to PATH in ${SHELL_PROFILE/#$HOME/\~}${NC}"
     fi
 
-    # Also export for the current session
     export PATH="$HOME/.local/bin:$PATH"
-
     echo -e "${YELLOW}⚠ Restart your terminal or run:  source ${SHELL_PROFILE/#$HOME/\~}${NC}"
 else
     echo -e "${YELLOW}⚠ 'tinyagi' command not found in PATH${NC}"
@@ -129,6 +107,5 @@ else
 fi
 
 echo ""
-echo "To uninstall, run:"
-echo -e "  ${GREEN}./uninstall.sh${NC}"
+echo "To uninstall: npm uninstall -g tinyagi"
 echo ""

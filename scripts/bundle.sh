@@ -15,7 +15,7 @@ NC='\033[0m'
 
 echo ""
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║     TinyAGI Bundle Creator           ║${NC}"
+echo -e "${BLUE}║     TinyAGI Bundle Creator            ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -97,11 +97,10 @@ cp .gitignore "$BUNDLE_DIR/"
 
 # Make scripts executable
 chmod +x "$BUNDLE_DIR/bin/tinyagi"
+chmod +x "$BUNDLE_DIR/bin/tinyagi"
 chmod +x "$BUNDLE_DIR/tinyagi.sh"
 chmod +x "$BUNDLE_DIR/scripts/install.sh"
-chmod +x "$BUNDLE_DIR/scripts/uninstall.sh"
 chmod +x "$BUNDLE_DIR/scripts/bundle.sh"
-chmod +x "$BUNDLE_DIR/scripts/remote-install.sh"
 chmod +x "$BUNDLE_DIR/lib/heartbeat-cron.sh"
 chmod +x "$BUNDLE_DIR/lib/update.sh"
 

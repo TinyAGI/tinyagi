@@ -10,6 +10,13 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# --- ASCII Banner ---
+show_banner() {
+    echo '  ▀█▀ █ █▄ █ █▄█ █▀█ █▀▀ █'
+    echo '   █  █ █ ▀█  █  █▀█ █▄█ █'
+    echo ""
+}
+
 # --- Channel registry ---
 # Single source of truth. Add new channels here and everything else adapts.
 

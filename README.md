@@ -54,13 +54,17 @@ We are actively looking for contributors. Please reach out.
 - [Claude Code CLI](https://claude.com/claude-code) (for Anthropic provider)
 - [Codex CLI](https://docs.openai.com/codex) (for OpenAI provider)
 
-### Installation
+### Installation & First Run
 
-**Option 1: One-line Install (Recommended)**
+**Option 1: npx (Recommended)**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TinyAGI/tinyagi/main/scripts/remote-install.sh | bash
+npx tinyagi
 ```
+
+This installs TinyAGI, creates a default workspace and agent, starts the API server, and opens the web setup portal where you can configure channels, providers, and agents from your browser.
+
+After the first run, the `tinyagi` command is available globally (no `npx` needed).
 
 <details>
 <summary><b>Other installation methods</b></summary>
@@ -80,15 +84,17 @@ git clone https://github.com/TinyAGI/tinyagi.git
 cd tinyagi && npm install && ./scripts/install.sh
 ```
 
-</details>
-
-### First Run
+**Web-based setup (skip CLI wizard):**
 
 ```bash
-tinyagi start  # Runs interactive setup wizard
+tinyagi start --skip-setup  # Starts API server only
+# Then open https://office.tinyagicompany.com or run: tinyagi office
+# After setup, channels start automatically
 ```
 
-The setup wizard will guide you through channel selection, bot tokens, workspace setup, default agent, AI provider, model selection, and heartbeat interval.
+</details>
+
+The setup wizard (CLI or web) will guide you through channel selection, bot tokens, workspace setup, default agent, AI provider, model selection, and heartbeat interval.
 
 <details>
 <summary><b>📱 Channel Setup Guides</b></summary>
@@ -184,13 +190,13 @@ echo 'NEXT_PUBLIC_API_URL=http://localhost:3777' > .env.local
 
 ## 📋 Commands
 
-Commands work with `tinyagi` (if CLI installed) or `./tinyagi.sh` (direct script).
+Commands work with `tinyagi` (primary CLI) or `tinyagi` (backward compatible alias).
 
 ### Core Commands
 
 | Command       | Description                                               | Example               |
 | ------------- | --------------------------------------------------------- | --------------------- |
-| `start`       | Start TinyAGI daemon                                     | `tinyagi start`      |
+| `start [--skip-setup]` | Start TinyAGI daemon (--skip-setup: API only, setup via web) | `tinyagi start` |
 | `stop`        | Stop all processes                                        | `tinyagi stop`       |
 | `restart`     | Restart TinyAGI                                          | `tinyagi restart`    |
 | `status`      | Show current status and activity                          | `tinyagi status`     |
@@ -265,7 +271,7 @@ Custom providers let you use any OpenAI or Anthropic-compatible API endpoint (e.
       "harness": "claude",
       "base_url": "https://proxy.example.com/v1",
       "api_key": "sk-...",
-      "model": "claude-sonnet-4-5"
+      "model": "claude-sonnet-4-6"
     }
   }
 }
@@ -365,7 +371,7 @@ These commands work in Discord, Telegram, and WhatsApp:
 > **Note:** If you are on v0.0.1 or v0.0.2, the update script was broken. Please re-install instead:
 >
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/TinyAGI/tinyagi/main/scripts/remote-install.sh | bash
+> npx tinyagi install
 > ```
 >
 > Your settings and user data will be preserved.
@@ -524,7 +530,7 @@ Located at `.tinyagi/settings.json`:
       "harness": "claude",
       "base_url": "https://proxy.example.com/v1",
       "api_key": "sk-...",
-      "model": "claude-sonnet-4-5"
+      "model": "claude-sonnet-4-6"
     }
   },
   "models": {

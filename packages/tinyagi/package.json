@@ -1,0 +1,32 @@
+{
+  "name": "tinyagi",
+  "version": "0.0.13",
+  "description": "Multi-agent AI assistant — quick start for TinyAGI",
+  "type": "module",
+  "bin": {
+    "tinyagi": "./bin/tinyagi.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "multi-agent",
+    "claude",
+    "tinyagi",
+    "tinyagi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TinyAGI/tinyagi"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "open": "^10.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

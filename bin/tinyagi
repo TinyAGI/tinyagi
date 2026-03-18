@@ -22,5 +22,5 @@ REPO_ROOT="$(dirname "$TINYAGI_DIR")"
 # Installed CLI always uses ~/.tinyagi for data
 export TINYAGI_HOME="$HOME/.tinyagi"
 
-# Execute the main script with all arguments
-exec "$REPO_ROOT/tinyagi.sh" "$@"
+# Execute tinyagi.mjs with all arguments
+exec node "$REPO_ROOT/packages/tinyagi/bin/tinyagi.mjs" "$@"

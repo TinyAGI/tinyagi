@@ -1,6 +1,6 @@
 {
   "name": "tinyagi",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Multi-agent, multi-team, multi-channel 24/7 AI assistant",
   "workspaces": [
     "packages/*"
@@ -26,5 +26,8 @@
     "concurrently": "^9.2.1",
     "nodemon": "^3.1.9",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "croner": "^10.0.1"
   }
 }

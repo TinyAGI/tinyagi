@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { SCRIPT_DIR } from '@tinyagi/core';
-import { unwrap } from './shared.ts';
+import { unwrap, printBanner } from './shared.ts';
 
 const GITHUB_REPO = 'TinyAGI/tinyagi';
 const UPDATE_CHECK_CACHE = path.join(process.env.HOME || '~', '.tinyagi', '.update_check');
@@ -53,6 +53,7 @@ function sessionExists(): boolean {
 }
 
 async function doUpdate() {
+    printBanner();
     p.intro('TinyAGI Update');
 
     // Check if running

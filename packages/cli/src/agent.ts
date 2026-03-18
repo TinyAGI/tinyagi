@@ -6,7 +6,7 @@ import { CustomProvider, ensureAgentDirectory } from '@tinyagi/core';
 import {
     unwrap, cleanId, validateId, required,
     writeSettings, requireSettings, SCRIPT_DIR,
-    providerOptions, promptModel, harnessOptions,
+    providerOptions, promptModel, harnessOptions, printBanner,
 } from './shared.ts';
 
 // --- agent add ---
@@ -14,6 +14,7 @@ import {
 async function agentAdd() {
     const settings = requireSettings();
 
+    printBanner();
     p.intro('Add New Agent');
 
     const agentId = cleanId(unwrap(await p.text({
@@ -73,6 +74,11 @@ async function agentAdd() {
         agentModel = await promptModel(agentProvider);
     }
 
+    const systemPrompt = unwrap(await p.text({
+        message: "System prompt (written to AGENTS.md, optional)",
+        placeholder: 'optional',
+    })) || '';
+
     const workspacePath = settings.workspace?.path || path.join(process.env.HOME || '~', 'tinyagi-workspace');
     const agentWorkdir = path.join(workspacePath, agentId);
 
@@ -86,6 +92,10 @@ async function agentAdd() {
     writeSettings(settings);
 
     ensureAgentDirectory(agentWorkdir);
+
+    if (systemPrompt) {
+        fs.writeFileSync(path.join(agentWorkdir, 'AGENTS.md'), systemPrompt, 'utf8');
+    }
 
     p.log.success(`Agent '${agentId}' created!`);
     p.log.info(`Directory: ${agentWorkdir}`);
@@ -158,6 +168,7 @@ async function agentRemove(agentId: string) {
 async function customProviderAdd() {
     const settings = requireSettings();
 
+    printBanner();
     p.intro('Add Custom Provider');
 
     const providerId = cleanId(unwrap(await p.text({
@@ -192,7 +203,7 @@ async function customProviderAdd() {
     }));
 
     const modelName = unwrap(await p.text({
-        message: "Default model name (e.g. 'claude-sonnet-4-5', optional)",
+        message: "Default model name (e.g. 'claude-sonnet-4-6', optional)",
         placeholder: 'optional',
     }));
 

@@ -6,7 +6,7 @@ import { Settings, AgentConfig, ensureAgentDirectory, copyDirSync } from '@tinya
 import {
     unwrap, cleanId, validateId, required,
     writeSettings, SETTINGS_FILE, TINYAGI_HOME, SCRIPT_DIR,
-    providerOptions, promptModel,
+    providerOptions, promptModel, printBanner,
 } from './shared.ts';
 
 const ALL_CHANNELS = ['telegram', 'discord', 'whatsapp'] as const;
@@ -28,6 +28,7 @@ const CHANNEL_TOKEN_HELP: Record<string, string> = {
 };
 
 async function main() {
+    printBanner();
     p.intro('TinyAGI - Setup Wizard');
 
     // --- Channel selection ---
