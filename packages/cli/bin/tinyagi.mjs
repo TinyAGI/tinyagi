@@ -196,9 +196,10 @@ function installCli() {
 // ── Run (smart default: onboard if first time, otherwise just start) ────────
 
 async function run() {
-    // If settings already exist, just delegate to `tinyagi start`
+    // If settings already exist, just delegate to `tinyagi start` + open office
     if (isInstalled() && fs.existsSync(path.join(os.homedir(), '.tinyagi', 'settings.json'))) {
         delegateToBash(['start'], { sync: true });
+        await openOffice();
         return;
     }
 
@@ -235,6 +236,10 @@ async function run() {
     }
 
     // 5. Open office
+    await openOffice();
+}
+
+async function openOffice() {
     console.log('');
     log(GREEN, `Opening TinyOffice: ${PORTAL_URL}`);
     try {
@@ -346,6 +351,13 @@ switch (command) {
         console.log('  update                   Update TinyAGI to latest version');
         console.log('  version                  Show current version');
         console.log('');
+        break;
+
+    // start/restart: delegate to bash then open office
+    case 'start':
+    case 'restart':
+        delegateToBash([command, ...restArgs], { sync: true });
+        openOffice();
         break;
 
     // All other commands delegate to tinyagi.sh
