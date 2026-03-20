@@ -51,6 +51,14 @@ function checkPrerequisites() {
         }
         process.exit(1);
     }
+
+    // Soft check: warn if neither claude nor codex CLI is installed
+    if (!commandExists('claude') && !commandExists('codex')) {
+        log(YELLOW, 'Warning: neither \'claude\' nor \'codex\' CLI found');
+        console.log('  Install Claude: npm install -g @anthropic-ai/claude-code');
+        console.log('  Install Codex:  npm install -g @openai/codex');
+        console.log('');
+    }
 }
 
 // ── Installation ─────────────────────────────────────────────────────────────
@@ -207,44 +215,17 @@ async function run() {
     if (wrote) {
         log(GREEN, '✓ Default settings written');
         console.log(`  Workspace: ~/tinyagi-workspace`);
-        console.log(`  Agent: TinyAGI Agent (anthropic/opus)`);
+        console.log(`  Agent: tinyagi (anthropic/opus)`);
         console.log('');
     }
 
-    // 4. Start with --skip-setup
-    log(BLUE, 'Starting TinyAGI...');
+    // 4. Start daemon (auto-creates defaults if needed)
     try {
-        delegateToBash(['start', '--skip-setup'], { sync: true });
+        delegateToBash(['start'], { sync: true });
     } catch {
         // May already be running
         log(YELLOW, 'TinyAGI may already be running (use tinyagi status to check)');
     }
-
-    // 5. Open web portal
-    console.log('');
-    log(GREEN, '✓ Opening TinyAGI setup portal...');
-    console.log(`  ${BLUE}${PORTAL_URL}${NC}`);
-    console.log('');
-
-    try {
-        const open = (await import('open')).default;
-        await open(PORTAL_URL);
-    } catch {
-        log(YELLOW, `Could not open browser. Visit ${PORTAL_URL} manually.`);
-    }
-
-    // 6. Instructions
-    console.log('');
-    log(GREEN, 'Next steps:');
-    console.log('  1. Complete setup in the web portal');
-    console.log('  2. Once configured, channels will start automatically');
-    console.log('');
-    console.log('Useful commands:');
-    console.log(`  ${BLUE}tinyagi status${NC}    Check status`);
-    console.log(`  ${BLUE}tinyagi stop${NC}      Stop all processes`);
-    console.log(`  ${BLUE}tinyagi restart${NC}   Restart with new settings`);
-    console.log(`  ${BLUE}tinyagi office${NC}    Start local web portal`);
-    console.log('');
 }
 
 // ── Delegate to bash (tinyagi.sh) ───────────────────────────────────────────
@@ -291,7 +272,7 @@ switch (command) {
         console.log('Usage: tinyagi [command]');
         console.log('');
         console.log('Quick Start:');
-        console.log('  run                      Install, configure defaults, start, and open portal (default)');
+        console.log('  run                      Install, configure defaults, and start (default)');
         console.log('  install                  Install TinyAGI only');
         console.log('');
         console.log('Daemon:');

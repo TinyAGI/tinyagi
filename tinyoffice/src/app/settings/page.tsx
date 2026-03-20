@@ -57,7 +57,7 @@ export default function SettingsPage() {
       setSettings(s);
       setRawJson(JSON.stringify(s, null, 2));
       const isEmpty = !s || (Object.keys(s).length === 0) ||
-        (!s.channels?.enabled?.length && !s.agents && !s.models?.provider);
+        (!s.agents && !s.models?.provider);
       setNeedsSetup(isEmpty);
     } catch (err) {
       setErrorMsg((err as Error).message);

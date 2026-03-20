@@ -78,7 +78,7 @@ async function processMessage(dbMsg: any): Promise<void> {
     }
 
     if (!agents[agentId]) {
-        agentId = 'default';
+        agentId = 'tinyagi';
         message = rawMessage;
     }
     if (!agents[agentId]) {
