@@ -20,7 +20,7 @@ import {
     completeMessage, failMessage,
     recoverStaleMessages, pruneAckedResponses, pruneCompletedMessages,
     closeQueueDb, queueEvents,
-    insertAgentMessage,
+    insertAgentMessage, hasAgentMessage,
     startScheduler, stopScheduler,
 } from '@tinyagi/core';
 import { startApiServer } from '@tinyagi/server';
@@ -108,7 +108,7 @@ async function processMessage(dbMsg: any): Promise<void> {
     }
     // ── Persist & emit agent:response ──────────────────────────────────
     const msgSender = isInternal ? data.fromAgent! : sender;
-    if (!isInternal) {
+    if (!isInternal && !hasAgentMessage(messageId, 'user')) {
         insertAgentMessage({ agentId, role: 'user', channel, sender: msgSender, messageId, content: rawMessage });
     }
     insertAgentMessage({ agentId, role: 'assistant', channel, sender: msgSender, messageId, content: response });

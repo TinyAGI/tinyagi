@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { log, emitEvent, enqueueMessage, genId } from '@tinyagi/core';
+import { log, emitEvent, enqueueMessage, insertAgentMessage, genId } from '@tinyagi/core';
 
 const app = new Hono();
 
@@ -30,6 +30,18 @@ app.post('/api/message', async (c) => {
 
     if (rowId === null) {
         return c.json({ error: 'duplicate messageId', messageId }, 409);
+    }
+
+    // Persist user message immediately so it appears on the next poll
+    if (agent) {
+        insertAgentMessage({
+            agentId: agent,
+            role: 'user',
+            channel: resolvedChannel,
+            sender: resolvedSender,
+            messageId,
+            content: message,
+        });
     }
 
     log('INFO', `[API] Message enqueued: ${message}`);

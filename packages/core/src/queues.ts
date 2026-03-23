@@ -214,6 +214,13 @@ export function insertAgentMessage(data: {
     ).run(data.agentId, data.role, data.channel, data.sender, data.messageId, data.content, Date.now()).lastInsertRowid as number;
 }
 
+export function hasAgentMessage(messageId: string, role: 'user' | 'assistant'): boolean {
+    const row = getDb().prepare(
+        `SELECT 1 FROM agent_messages WHERE message_id=? AND role=? LIMIT 1`
+    ).get(messageId, role);
+    return !!row;
+}
+
 export function getAgentMessages(agentId: string, limit = 100): any[] {
     return getDb().prepare(
         `SELECT * FROM agent_messages WHERE agent_id=? ORDER BY created_at DESC LIMIT ?`
