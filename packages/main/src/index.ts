@@ -20,7 +20,7 @@ import {
     markProcessing, completeMessage, failMessage,
     recoverStaleMessages, pruneAckedResponses, pruneCompletedMessages,
     closeQueueDb, queueEvents,
-    insertAgentMessage, hasAgentMessage,
+    insertAgentMessage,
     startScheduler, stopScheduler,
 } from '@tinyagi/core';
 import { startApiServer } from '@tinyagi/server';
@@ -100,19 +100,24 @@ async function processMessage(dbMsg: any): Promise<void> {
             log('INFO', `Agent ${agentId}: ${text}`);
             insertAgentMessage({ agentId, role: 'assistant', channel, sender: agentId, messageId, content: text });
             emitEvent('agent:progress', { agentId, agentName: agent.name, text, messageId });
+            sendDirectResponse(text, {
+                channel, sender, senderId: data.senderId,
+                messageId, originalMessage: rawMessage, agentId,
+            });
         });
     } catch (error) {
         const provider = agent.provider || 'anthropic';
         const providerLabel = provider === 'openai' ? 'Codex' : provider === 'opencode' ? 'OpenCode' : 'Claude';
         log('ERROR', `${providerLabel} error (agent: ${agentId}): ${(error as Error).message}`);
         response = "Sorry, I encountered an error processing your request. Please check the queue logs.";
+        const msgSender = isInternal ? data.fromAgent! : sender;
+        insertAgentMessage({ agentId, role: 'assistant', channel, sender: msgSender, messageId, content: response });
+        await sendDirectResponse(response, {
+            channel, sender, senderId: data.senderId,
+            messageId, originalMessage: rawMessage, agentId,
+        });
     }
-    // ── Persist & emit agent:response ──────────────────────────────────
-    const msgSender = isInternal ? data.fromAgent! : sender;
-    if (!isInternal && !hasAgentMessage(messageId, 'user')) {
-        insertAgentMessage({ agentId, role: 'user', channel, sender: msgSender, messageId, content: rawMessage });
-    }
-    insertAgentMessage({ agentId, role: 'assistant', channel, sender: msgSender, messageId, content: response });
+
     emitEvent('agent:response', {
         agentId, agentName: agent.name, role: 'assistant',
         channel, sender, messageId,
@@ -121,18 +126,12 @@ async function processMessage(dbMsg: any): Promise<void> {
     });
 
     // ── Response routing ────────────────────────────────────────────────────
-    // Always try team orchestration first — handles team-routed, internal,
-    // AND direct messages to agents that belong to a team.
+    // Team orchestration — handles team-routed, internal, and direct messages
+    // to agents that belong to a team.
 
-    const handled = await handleTeamResponse({
+    await handleTeamResponse({
         agentId, response, isTeamRouted, data, agents, teams,
     });
-    if (!handled) {
-        await sendDirectResponse(response, {
-            channel, sender, senderId: data.senderId,
-            messageId, originalMessage: rawMessage, agentId,
-        });
-    }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -141,7 +140,8 @@ async function sendDirectResponse(
     response: string,
     ctx: { channel: string; sender: string; senderId?: string | null; messageId: string; originalMessage: string; agentId: string }
 ): Promise<void> {
-    await streamResponse(response, {
+    const signed = `${response}\n\n- [${ctx.agentId}]`;
+    await streamResponse(signed, {
         channel: ctx.channel,
         sender: ctx.sender,
         senderId: ctx.senderId ?? undefined,
