@@ -126,9 +126,10 @@ export function runCommandStreaming(
             graceTimer = setTimeout(() => {
                 if (!settled) {
                     log('WARN', `Process '${command}' did not exit within grace period after result — killing`);
+                    // Resolve successfully BEFORE killing — the kill triggers a
+                    // `close` event with code 143 which would otherwise reject.
+                    settle(0);
                     try { child.kill('SIGTERM'); } catch { /* already dead */ }
-                    // Give SIGTERM a moment, then force-resolve
-                    setTimeout(() => settle(0), 2000);
                 }
             }, 30_000);
         };
