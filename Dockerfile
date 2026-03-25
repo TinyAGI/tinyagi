@@ -42,6 +42,7 @@ FROM node:20-slim
 RUN apt-get update && apt-get install -y \
     git \
     chromium \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Point Puppeteer (whatsapp-web.js) at system Chromium
@@ -71,4 +72,5 @@ ENV TINYAGI_API_PORT=3777
 
 EXPOSE 3777
 
-CMD ["node", "packages/main/dist/index.js"]
+COPY docker-entrypoint.sh ./
+ENTRYPOINT ["./docker-entrypoint.sh"]
