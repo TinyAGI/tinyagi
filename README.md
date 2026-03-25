@@ -45,20 +45,6 @@ We are actively looking for contributors. Please reach out.
 
 ## 🚀 Quick Start
 
-### Docker
-
-```bash
-docker compose up -d
-```
-
-Set your API key in a `.env` file or pass it directly:
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-... docker compose up -d
-```
-
-The API runs on `http://localhost:3777`. Data is persisted in a `tinyagi-data` Docker volume.
-
 ### Prerequisites
 
 - macOS, Linux and Windows (WSL2)
@@ -104,6 +90,23 @@ npx tinyagi agent list
 git clone https://github.com/TinyAGI/tinyagi.git
 cd tinyagi && npm install && ./scripts/install.sh
 ```
+
+</details>
+
+<details>
+<summary><b>🐳 Docker</b></summary>
+
+```bash
+docker compose up -d
+```
+
+Set your API key in a `.env` file or pass it directly:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... docker compose up -d
+```
+
+The API runs on `http://localhost:3777`. Data is persisted in a `tinyagi-data` Docker volume.
 
 </details>
 

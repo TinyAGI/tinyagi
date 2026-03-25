@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json ./
+COPY package.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/main/package.json packages/main/
 COPY packages/server/package.json packages/server/
@@ -20,10 +20,11 @@ COPY packages/channels/package.json packages/channels/
 COPY packages/cli/package.json packages/cli/
 COPY packages/visualizer/package.json packages/visualizer/
 
-RUN npm ci
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+RUN npm install
 
 # Copy source and build
-COPY tsconfig.base.json ./
+COPY tsconfig.json tsconfig.base.json ./
 COPY packages/ packages/
 COPY .agents/ .agents/
 COPY AGENTS.md heartbeat.md SOUL.md ./
