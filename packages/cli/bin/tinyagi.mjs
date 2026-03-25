@@ -18,6 +18,15 @@ const RED = '\x1b[31m';
 const BLUE = '\x1b[34m';
 const NC = '\x1b[0m';
 
+const BANNER = `
+  ▀█▀ █ █▄ █ █▄█ █▀█ █▀▀ █
+   █  █ █ ▀█  █  █▀█ █▄█ █
+`;
+
+function printBanner() {
+    console.log(BANNER);
+}
+
 function log(color, msg) {
     process.stdout.write(`${color}${msg}${NC}\n`);
 }
@@ -40,6 +49,8 @@ const REPO_ROOT = path.resolve(new URL('.', import.meta.url).pathname, '../../..
 const CLI_DIR = path.join(REPO_ROOT, 'packages/cli/dist');
 const PID_FILE = path.join(TINYAGI_HOME, 'tinyagi.pid');
 const LOG_DIR = path.join(TINYAGI_HOME, 'logs');
+const API_PORT = parseInt(process.env.TINYAGI_API_PORT || '3777', 10);
+const API_URL = `http://localhost:${API_PORT}`;
 
 // ── Prerequisites ────────────────────────────────────────────────────────────
 
@@ -219,7 +230,34 @@ function isRunning() {
     }
 }
 
-function startDaemon() {
+async function fetchStatus() {
+    try {
+        const res = await fetch(`${API_URL}/api/status`);
+        return await res.json();
+    } catch {
+        return null;
+    }
+}
+
+async function waitForServer(maxWait = 8000) {
+    const start = Date.now();
+    while (Date.now() - start < maxWait) {
+        const status = await fetchStatus();
+        if (status?.ok) return status;
+        await new Promise(r => setTimeout(r, 300));
+    }
+    return null;
+}
+
+function formatUptime(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+}
+
+async function startDaemon() {
     if (isRunning()) {
         log(YELLOW, 'TinyAGI is already running');
         return;
@@ -247,7 +285,35 @@ function startDaemon() {
     child.unref();
 
     log(GREEN, `TinyAGI started (PID: ${child.pid})`);
-    log(GREEN, `Logs: ${logFile}`);
+
+    // Wait for server to be ready and print service status
+    const status = await waitForServer();
+    if (status) {
+        log(GREEN, `  Server:    http://localhost:${status.server?.port || API_PORT}`);
+
+        const channels = status.channels || {};
+        const channelNames = Object.keys(channels);
+        if (channelNames.length > 0) {
+            for (const ch of channelNames) {
+                const c = channels[ch];
+                const icon = c.running ? GREEN + '●' : RED + '○';
+                log(NC, `  Channel:   ${icon} ${ch}${c.pid ? ` (PID: ${c.pid})` : ''}${NC}`);
+            }
+        } else {
+            log(NC, `  Channels:  ${YELLOW}none enabled${NC}`);
+        }
+
+        const hb = status.heartbeat || {};
+        if (hb.running) {
+            log(NC, `  Heartbeat: ${GREEN}● running${NC} (interval: ${hb.interval}s)`);
+        } else {
+            log(NC, `  Heartbeat: ${YELLOW}○ off${NC}`);
+        }
+    } else {
+        log(YELLOW, '  (waiting for server...)');
+    }
+
+    log(NC, `  Logs:      ${logFile}`);
 }
 
 function stopDaemon() {
@@ -266,12 +332,62 @@ function stopDaemon() {
     try { fs.unlinkSync(PID_FILE); } catch {}
 }
 
-function statusDaemon() {
-    if (isRunning()) {
-        const pid = fs.readFileSync(PID_FILE, 'utf8').trim();
-        log(GREEN, `TinyAGI is running (PID: ${pid})`);
-    } else {
+async function statusDaemon() {
+    if (!isRunning()) {
         log(YELLOW, 'TinyAGI is not running');
+        return;
+    }
+
+    const pid = fs.readFileSync(PID_FILE, 'utf8').trim();
+    const status = await fetchStatus();
+
+    if (!status?.ok) {
+        log(GREEN, `TinyAGI is running (PID: ${pid})`);
+        log(YELLOW, '  Server:    not responding');
+        return;
+    }
+
+    log(GREEN, `TinyAGI is running (PID: ${pid}, uptime: ${formatUptime(status.uptime)})`);
+    log(NC, `  Server:    ${GREEN}● http://localhost:${status.server?.port || API_PORT}${NC}`);
+
+    // Queue status
+    try {
+        const qRes = await fetch(`${API_URL}/api/queue/status`);
+        const q = await qRes.json();
+        const parts = [];
+        if (q.processing > 0) parts.push(`${q.processing} processing`);
+        if (q.queued > 0) parts.push(`${q.queued} queued`);
+        if (q.dead > 0) parts.push(`${RED}${q.dead} dead${NC}`);
+        if (q.completed > 0) parts.push(`${q.completed} completed`);
+        log(NC, `  Queue:     ${GREEN}●${NC} ${parts.length > 0 ? parts.join(', ') : 'idle'}`);
+    } catch {
+        log(NC, `  Queue:     ${YELLOW}? unknown${NC}`);
+    }
+
+    // Channels
+    const channels = status.channels || {};
+    const channelNames = Object.keys(channels);
+    if (channelNames.length > 0) {
+        for (const ch of channelNames) {
+            const c = channels[ch];
+            const icon = c.running ? GREEN + '●' : RED + '○';
+            const state = c.running ? 'running' : 'stopped';
+            log(NC, `  Channel:   ${icon} ${ch}${NC} — ${state}${c.pid ? ` (PID: ${c.pid})` : ''}`);
+        }
+    } else {
+        log(NC, `  Channels:  ${YELLOW}none enabled${NC}`);
+    }
+
+    // Heartbeat
+    const hb = status.heartbeat || {};
+    if (hb.running) {
+        const lastSent = Object.entries(hb.lastSent || {});
+        const lastStr = lastSent.length > 0
+            ? lastSent.map(([agent, ts]) => `${agent}: ${formatUptime(Math.floor(Date.now() / 1000) - ts)} ago`).join(', ')
+            : 'none yet';
+        log(NC, `  Heartbeat: ${GREEN}● running${NC} (interval: ${hb.interval}s, last: ${lastStr})`);
+    } else {
+        log(NC, `  Heartbeat: ${YELLOW}○ off${NC}`);
     }
 }
 
@@ -331,7 +447,7 @@ function getVersion() {
 async function run() {
     // If settings already exist, just start + open office
     if (isInstalled() && fs.existsSync(path.join(TINYAGI_HOME, 'settings.json'))) {
-        startDaemon();
+        await startDaemon();
         await openOffice();
         return;
     }
@@ -362,7 +478,7 @@ async function run() {
     console.log('');
 
     // 4. Start daemon
-    startDaemon();
+    await startDaemon();
 
     // 5. Open office
     await openOffice();
@@ -392,6 +508,8 @@ function runCliScript(script, args) {
 const command = process.argv[2] || 'run';
 const restArgs = process.argv.slice(3);
 
+printBanner();
+
 switch (command) {
     case 'run':
         run();
@@ -409,7 +527,7 @@ switch (command) {
     // ── Daemon ───────────────────────────────────────────────────────────────
 
     case 'start':
-        startDaemon();
+        await startDaemon();
         openOffice();
         break;
 
@@ -419,12 +537,12 @@ switch (command) {
 
     case 'restart':
         stopDaemon();
-        // Brief delay to let the process clean up
-        setTimeout(() => startDaemon(), 1000);
+        await new Promise(r => setTimeout(r, 1000));
+        await startDaemon();
         break;
 
     case 'status':
-        statusDaemon();
+        await statusDaemon();
         break;
 
     // ── Logs ─────────────────────────────────────────────────────────────────
@@ -470,11 +588,29 @@ switch (command) {
                 break;
             case 'start':
             case 'stop':
-                // Channel start/stop is now managed by the main process
-                log(YELLOW, 'Channel start/stop is managed automatically. Edit channels.enabled in settings.json and restart.');
+            case 'restart': {
+                const action = restArgs[0];
+                if (!restArgs[1]) {
+                    console.log(`Usage: tinyagi channel ${action} <telegram|discord|whatsapp>`);
+                    process.exit(1);
+                }
+                const channelId = restArgs[1];
+                fetch(`${API_URL}/api/services/channel/${channelId}/${action}`, { method: 'POST' })
+                    .then(async (res) => {
+                        const data = await res.json();
+                        if (data.ok) {
+                            log(GREEN, `Channel ${channelId} ${data.action}`);
+                        } else {
+                            log(RED, data.error || `Failed to ${action} ${channelId}`);
+                        }
+                    })
+                    .catch(() => {
+                        log(RED, 'TinyAGI is not running. Start it first with: tinyagi start');
+                    });
                 break;
+            }
             default:
-                console.log('Usage: tinyagi channel {setup|reset|start|stop} [channel_id]');
+                console.log('Usage: tinyagi channel {setup|start|stop|restart|reset} <channel_id>');
                 process.exit(1);
         }
         break;

@@ -96,3 +96,11 @@ export function stopHeartbeat(): void {
         timer = null;
     }
 }
+
+export function getHeartbeatStatus(): { running: boolean; interval: number; lastSent: Record<string, number> } {
+    return {
+        running: timer !== null,
+        interval: getBaseInterval(),
+        lastSent: Object.fromEntries(lastSentAt),
+    };
+}
