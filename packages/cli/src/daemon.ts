@@ -168,7 +168,7 @@ export async function statusDaemon(): Promise<void> {
     // Queue status
     try {
         const qRes = await fetch(`${API_URL}/api/queue/status`);
-        const q = await qRes.json();
+        const q: any = await qRes.json();
         const parts: string[] = [];
         if (q.processing > 0) parts.push(`${q.processing} processing`);
         if (q.queued > 0) parts.push(`${q.queued} queued`);

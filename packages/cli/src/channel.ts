@@ -18,7 +18,7 @@ function log(color: string, msg: string): void {
 export async function channelAction(channelId: string, action: 'start' | 'stop' | 'restart'): Promise<void> {
     try {
         const res = await fetch(`${API_URL}/api/services/channel/${channelId}/${action}`, { method: 'POST' });
-        const data = await res.json();
+        const data: any = await res.json();
         if (data.ok) {
             log(GREEN, `Channel ${channelId} ${data.action}`);
         } else {
