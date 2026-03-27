@@ -29,6 +29,7 @@ import { createServicesRoutes, type ServiceHandlers } from './routes/services';
 import pairingRoutes from './routes/pairing';
 export type { ServiceHandlers } from './routes/services';
 import schedulesRoutes from './routes/schedules';
+import { initTasksDb } from './tasks-db';
 
 const API_PORT = parseInt(process.env.TINYAGI_API_PORT || '3777', 10);
 
@@ -41,6 +42,8 @@ const startedAt = Date.now();
  * @returns The http.Server instance (for graceful shutdown).
  */
 export function startApiServer(services?: ServiceHandlers): http.Server {
+    // Initialize tasks/projects SQLite database
+    initTasksDb();
     const app = new Hono();
 
     // CORS middleware
