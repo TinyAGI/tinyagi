@@ -389,16 +389,12 @@ export default function TasksPage() {
                       />
                     </td>
                     <td className="px-4 py-2">
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] font-mono font-semibold px-1.5 py-0"
-                        style={{
-                          color: project?.color,
-                          borderColor: project?.color ? `${project.color}40` : undefined,
-                        }}
+                      <span
+                        className="text-[11px] font-mono font-semibold"
+                        style={{ color: project?.color }}
                       >
                         {task.identifier}
-                      </Badge>
+                      </span>
                     </td>
                     <td className="px-4 py-2">
                       <p className="font-medium">{task.title}</p>
