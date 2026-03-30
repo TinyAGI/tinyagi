@@ -714,6 +714,20 @@ export function PixelOfficeScene({
             worldHeight={PIXEL_SCENE_LAYOUT.height}
             onClick={onAgentClick ? () => onAgentClick(agent.id) : undefined}
           />
+          {/* Name tag */}
+          <div
+            className="pointer-events-none absolute flex justify-center"
+            style={{
+              left: toPercent(agent.x - 50, PIXEL_SCENE_LAYOUT.width),
+              top: toPercent(agent.y + 4, PIXEL_SCENE_LAYOUT.height),
+              width: toPercent(100, PIXEL_SCENE_LAYOUT.width),
+              zIndex: Math.max(3, Math.round(agent.y * 10) + 1),
+            }}
+          >
+            <span className="whitespace-nowrap rounded-sm bg-[#241b16]/70 px-1.5 py-0.5 font-mono text-[9px] leading-none text-white/90">
+              {agent.id}
+            </span>
+          </div>
         </div>
       ))}
     </div>

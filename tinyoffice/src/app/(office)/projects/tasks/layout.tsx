@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { Suspense, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,18 @@ import {
 } from "lucide-react";
 
 export default function TasksLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense>
+      <TasksLayoutInner>{children}</TasksLayoutInner>
+    </Suspense>
+  );
+}
+
+function TasksLayoutInner({
   children,
 }: {
   children: React.ReactNode;
@@ -140,7 +152,7 @@ export default function TasksLayout({
                     isActive={!activeProject}
                     tooltip="All Tasks"
                   >
-                    <Link href="/tasks">
+                    <Link href="/projects">
                       <ClipboardList className="h-4 w-4" />
                       <span>All Tasks</span>
                     </Link>
@@ -191,7 +203,7 @@ export default function TasksLayout({
                           isActive={activeProject === project.id}
                           tooltip={project.name}
                         >
-                          <Link href={`/tasks?project=${project.id}`}>
+                          <Link href={`/projects?project=${project.id}`}>
                             <div
                               className="h-3.5 w-3.5 rounded shrink-0"
                               style={{ backgroundColor: project.color }}
@@ -264,7 +276,7 @@ export default function TasksLayout({
                           tooltip={project.name}
                           className="opacity-60"
                         >
-                          <Link href={`/tasks?project=${project.id}`}>
+                          <Link href={`/projects?project=${project.id}`}>
                             <div
                               className="h-3.5 w-3.5 rounded shrink-0 opacity-50"
                               style={{ backgroundColor: project.color }}

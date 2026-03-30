@@ -5,7 +5,6 @@ import { useState } from "react";
 import { PixelOfficeScene, PIXEL_SCENE_LAYOUT } from "@/components/office/pixel-office-scene";
 import { ArchivePanel, type ArchivePanelId } from "@/components/office/archive-panel";
 import { ConversationPanel } from "@/components/office/conversation-panel";
-import { AgentDetailPanel } from "@/components/office/agent-detail-panel";
 import { OverlayBubbles } from "@/components/office/overlay-bubbles";
 import { ARCHIVE_BUTTONS } from "@/components/office/types";
 import { useOfficeData } from "@/components/office/use-office-data";
@@ -76,23 +75,13 @@ export default function OfficePage() {
             />
           )}
 
-          {selectedAgentId ? (
-            <AgentDetailPanel
-              agentId={selectedAgentId}
-              agents={data.agents}
-              agentEntries={scene.agentEntries}
-              agentHistories={data.agentHistories}
-              bubbles={sse.bubbles}
-              onClose={() => setSelectedAgentId(null)}
-            />
-          ) : (
-            <ConversationPanel
-              agents={data.agents}
-              agentEntries={scene.agentEntries}
-              agentHistories={data.agentHistories}
-              bubbles={sse.bubbles}
-            />
-          )}
+          <ConversationPanel
+            agents={data.agents}
+            agentEntries={scene.agentEntries}
+            agentHistories={data.agentHistories}
+            bubbles={sse.bubbles}
+            selectedAgentId={selectedAgentId}
+          />
 
           <OverlayBubbles bubbles={scene.overlayBubbles} />
         </div>

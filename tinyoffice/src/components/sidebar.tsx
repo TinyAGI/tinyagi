@@ -10,17 +10,17 @@ import {
 } from "@/lib/api";
 import Image from "next/image";
 import {
-  Plus, Hash,
-  Settings, SlidersHorizontal, ClipboardList, Building2,
+  Plus, Hash, Network, FolderKanban,
+  Settings, SlidersHorizontal, Building2,
   Sun, Moon, SlidersVertical,
 } from "lucide-react";
 
-const AGENT_COLORS = [
+export const AGENT_COLORS = [
   "bg-blue-500", "bg-emerald-500", "bg-purple-500", "bg-orange-500",
   "bg-pink-500", "bg-cyan-500", "bg-yellow-500", "bg-red-500",
 ];
 
-function agentColor(agentId: string): string {
+export function agentColor(agentId: string): string {
   let hash = 0;
   for (let i = 0; i < agentId.length; i++) {
     hash = ((hash << 5) - hash + agentId.charCodeAt(i)) | 0;
@@ -56,14 +56,15 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Dashboard + Logs */}
+      {/* Navigation */}
       <div className="px-3 pt-2 pb-1 space-y-0.5">
         {[
-          { href: "/control", label: "Control Plane", icon: SlidersVertical },
-          { href: "/office", label: "Office", icon: Building2 },
-          { href: "/tasks", label: "Tasks", icon: ClipboardList },
-        ].map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
+          { href: "/", label: "Office", icon: Building2, exact: true },
+          { href: "/control", label: "Control", icon: SlidersVertical },
+          { href: "/company", label: "Company", icon: Network },
+          { href: "/projects", label: "Projects", icon: FolderKanban },
+        ].map(({ href, label, icon: Icon, exact }: { href: string; label: string; icon: typeof Building2; exact?: boolean }) => {
+          const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
@@ -141,7 +142,7 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Chat Rooms */}
+        {/* Teams */}
         <div className="pt-4">
           <div className="flex items-center justify-between px-2 mb-1">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -158,7 +159,7 @@ export function Sidebar() {
           <div className="space-y-0.5">
             {teamEntries.length > 0 ? (
               teamEntries.map(([id, team]) => {
-                const href = `/chat/team/${id}`;
+                const href = `/team/${id}`;
                 const active = pathname === href;
                 return (
                   <Link
@@ -194,8 +195,8 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Bottom: Settings only */}
-      <div className="border-t px-3 py-2">
+      {/* Bottom: Settings + Toggle */}
+      <div className="border-t px-3 py-2 space-y-0.5">
         <Link
           href="/settings"
           className={cn(
@@ -209,7 +210,6 @@ export function Sidebar() {
           Settings
         </Link>
       </div>
-
     </aside>
   );
 }

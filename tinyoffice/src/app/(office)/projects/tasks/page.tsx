@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { Suspense, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import type { UniqueIdentifier } from "@dnd-kit/core";
 import { usePolling } from "@/lib/hooks";
@@ -58,6 +58,14 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 export default function TasksPage() {
+  return (
+    <Suspense>
+      <TasksPageInner />
+    </Suspense>
+  );
+}
+
+function TasksPageInner() {
   const searchParams = useSearchParams();
   const projectFilter = searchParams.get("project");
 

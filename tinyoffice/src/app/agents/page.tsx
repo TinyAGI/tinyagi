@@ -11,9 +11,11 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Badge } from "@/components/ui/badge";
 import {
   Bot, Cpu, FileText, Plus, Pencil, Trash2,
-  X, Check, Loader2, Swords,
+  X, Check, Loader2,
 } from "lucide-react";
 import Link from "next/link";
+import { agentColor } from "@/components/sidebar";
+import { cn } from "@/lib/utils";
 
 type FormData = {
   id: string;
@@ -272,82 +274,73 @@ function AgentCard({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const providerColors: Record<string, string> = {
-    anthropic: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-    openai: "bg-green-500/10 text-green-600 dark:text-green-400",
-    opencode: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  };
-
   return (
-    <Card className="transition-colors hover:border-primary/50">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center bg-primary/10 text-primary text-sm font-bold uppercase">
-              {agent.name.slice(0, 2)}
-            </div>
-            <div>
-              <CardTitle className="text-base">{agent.name}</CardTitle>
-              <CardDescription>@{id}</CardDescription>
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={onEdit} className="h-8 w-8">
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            {confirmDelete ? (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => { onDelete(); setConfirmDelete(false); }}
-                  disabled={deleting}
-                  className="h-8 text-xs"
-                >
-                  {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Delete"}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)} className="h-8 text-xs">
-                  No
-                </Button>
+    <Link href={`/agents/${id}`} className="block">
+      <Card className="transition-colors hover:border-primary/50 cursor-pointer">
+        <CardHeader>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "flex h-10 w-10 items-center justify-center text-sm font-bold uppercase shrink-0 text-white",
+                agentColor(id),
+              )}>
+                {agent.name.slice(0, 2)}
               </div>
-            ) : (
-              <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(true)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                <Trash2 className="h-3.5 w-3.5" />
+              <div>
+                <CardTitle className="text-base">{agent.name}</CardTitle>
+                <CardDescription>@{id}</CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+              <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); onEdit(); }} className="h-8 w-8">
+                <Pencil className="h-3.5 w-3.5" />
               </Button>
-            )}
+              {confirmDelete ? (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={(e) => { e.preventDefault(); onDelete(); setConfirmDelete(false); }}
+                    disabled={deleting}
+                    className="h-8 text-xs"
+                  >
+                    {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Delete"}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); setConfirmDelete(false); }} className="h-8 text-xs">
+                    No
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); setConfirmDelete(true); }} className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
-          <Badge className={providerColors[agent.provider] || "bg-secondary text-secondary-foreground"}>
-            {agent.provider}
-          </Badge>
-          <Badge variant="outline">{agent.model}</Badge>
-        </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+            <Badge variant="outline">{agent.provider}</Badge>
+            <Badge variant="outline">{agent.model}</Badge>
+          </div>
 
-        {agent.system_prompt && (
-          <div className="flex items-start gap-2">
-            <FileText className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
-            <p className="text-xs text-muted-foreground line-clamp-2">
-              {agent.system_prompt}
+          {agent.system_prompt && (
+            <div className="flex items-start gap-2">
+              <FileText className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {agent.system_prompt}
+              </p>
+            </div>
+          )}
+
+          <div className="pt-2 border-t">
+            <p className="text-xs text-muted-foreground">
+              Send messages with <code className="bg-muted px-1 py-0.5 font-mono">@{id}</code> prefix
             </p>
           </div>
-        )}
-
-        <div className="pt-2 border-t flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            Send messages with <code className="bg-muted px-1 py-0.5 font-mono">@{id}</code> prefix
-          </p>
-          <Link href={`/agents/${id}`}>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-primary">
-              <Swords className="h-3 w-3" />
-              Skills
-            </Button>
-          </Link>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

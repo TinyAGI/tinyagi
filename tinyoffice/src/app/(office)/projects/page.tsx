@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function ProjectsRedirect() {
-  redirect("/tasks");
+  redirect("/projects/tasks");
 }

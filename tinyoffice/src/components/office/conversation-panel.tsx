@@ -34,6 +34,7 @@ type ConversationPanelProps = {
   agentEntries: [string, AgentConfig][];
   agentHistories: Record<string, AgentMessage[]> | null;
   bubbles: LiveBubble[];
+  selectedAgentId?: string | null;
 };
 
 export function ConversationPanel({
@@ -41,6 +42,7 @@ export function ConversationPanel({
   agentEntries,
   agentHistories,
   bubbles,
+  selectedAgentId,
 }: ConversationPanelProps) {
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -53,6 +55,13 @@ export function ConversationPanel({
     conversationStickToBottomRef.current = true;
     setConversationFilter(nextFilter);
   }, []);
+
+  // Sync external agent selection to conversation filter
+  useEffect(() => {
+    if (selectedAgentId) {
+      setConversationFilterAndStick(selectedAgentId);
+    }
+  }, [selectedAgentId, setConversationFilterAndStick]);
 
   const handleSend = useCallback(async () => {
     if (!chatInput.trim() || sending) return;
