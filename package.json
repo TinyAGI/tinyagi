@@ -22,7 +22,8 @@
     "whatsapp": "npm run whatsapp -w @tinyagi/channels",
     "server": "npm run start -w @tinyagi/server",
     "visualize": "npm run visualize -w @tinyagi/visualizer",
-    "chatroom": "npm run chatroom -w @tinyagi/visualizer"
+    "chatroom": "npm run chatroom -w @tinyagi/visualizer",
+    "postinstall": "npm rebuild better-sqlite3 --silent 2>/dev/null || true"
   },
   "devDependencies": {
     "@types/node": "^25.2.2",
