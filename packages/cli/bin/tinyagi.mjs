@@ -3,6 +3,7 @@
 import { execSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -21,7 +22,7 @@ function log(color, msg) {
     process.stdout.write(`${color}${msg}${NC}\n`);
 }
 
-const REPO_ROOT = path.resolve(new URL('.', import.meta.url).pathname, '../../..');
+const REPO_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..');
 const CLI_DIR = path.join(REPO_ROOT, 'packages/cli/dist');
 
 // ── CLI Script Runner ────────────────────────────────────────────────────────

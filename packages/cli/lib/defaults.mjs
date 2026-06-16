@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { fileURLToPath } from 'url';
 
 const TINYAGI_HOME = process.env.TINYAGI_HOME || path.join(os.homedir(), '.tinyagi');
 const SETTINGS_FILE = path.join(TINYAGI_HOME, 'settings.json');
@@ -40,7 +41,7 @@ function expandHome(p) {
  * Determine SCRIPT_DIR (repo root) — same logic as tinyagi.sh.
  * When running from packages/cli/lib/defaults.mjs, go up 3 levels.
  */
-const SCRIPT_DIR = path.resolve(new URL('.', import.meta.url).pathname, '../../..');
+const SCRIPT_DIR = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..');
 
 function copyDirSync(src, dest) {
     fs.mkdirSync(dest, { recursive: true });

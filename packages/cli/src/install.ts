@@ -24,8 +24,11 @@ function log(color: string, msg: string): void {
 }
 
 function commandExists(cmd: string): boolean {
+    const probe = process.platform === 'win32'
+        ? `where ${cmd}`
+        : `command -v ${cmd}`;
     try {
-        execSync(`command -v ${cmd}`, { stdio: 'ignore' });
+        execSync(probe, { stdio: 'ignore' });
         return true;
     } catch {
         return false;
