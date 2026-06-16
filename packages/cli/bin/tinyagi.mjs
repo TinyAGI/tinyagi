@@ -240,7 +240,7 @@ switch (command) {
             execSync(`cd "${officeDir}" && npm run build`, { stdio: 'inherit' });
         }
         log(GREEN, 'Starting TinyOffice on http://localhost:3000');
-        const child = spawn('npm', ['run', 'start'], { cwd: officeDir, stdio: 'inherit' });
+        const child = spawn('npm', ['run', 'start'], { cwd: officeDir, stdio: 'inherit', shell: process.platform === 'win32' });
         child.on('exit', (code) => process.exit(code || 0));
         break;
     }
