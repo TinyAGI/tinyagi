@@ -86,13 +86,15 @@ export interface ResponseData {
 // Shorthand model aliases — everything else passes through as-is to the CLI.
 export const MODEL_ALIASES: Record<string, Record<string, string>> = {
     anthropic: {
+        'haiku': 'claude-haiku-4-5-20251001',
         'sonnet': 'claude-sonnet-4-6',
-        'opus': 'claude-opus-4-6',
+        'opus': 'claude-opus-4-8',
     },
     openai: {},
     opencode: {
+        'haiku': 'opencode/claude-haiku-4-5',
         'sonnet': 'opencode/claude-sonnet-4-6',
-        'opus': 'opencode/claude-opus-4-6',
+        'opus': 'opencode/claude-opus-4-8',
     },
 };
 
