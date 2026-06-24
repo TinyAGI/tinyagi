@@ -9,55 +9,82 @@ import { getAdapter } from './adapters';
 
 // ── Executable resolution ───────────────────────────────────────────────────
 // On Windows, `spawn('claude', ...)` fails with ENOENT because `claude` on PATH
-// is a `.cmd`/`.ps1` shim, not a real executable. Spawning a `.cmd` would require
-// `shell: true`, which on Windows does NOT quote arguments — so messages/system
-// prompts containing spaces, quotes, or newlines would break (and risk injection).
+// is a `.cmd`/`.ps1` shim, not a real executable. We resolve to a real binary and
+// always spawn WITHOUT a shell, so arguments (which include untrusted agent
+// messages and system prompts) are passed verbatim and can never be interpreted
+// by cmd.exe — avoiding both breakage on spaces/quotes/newlines and command
+// injection.
 //
-// To stay shell-free, resolve the command to a real `.exe`: probe PATH for
-// `<cmd>.exe`, otherwise dereference the npm `<cmd>.cmd` shim to the `.exe` path
-// it launches. Falls back to the bare command (or `.cmd` with shell) if no exe
-// is found. Returns the resolved command plus whether a shell is required.
-const execCache = new Map<string, { cmd: string; shell: boolean }>();
+// Resolution probes PATH for `<cmd>.exe`, otherwise reads the npm `<cmd>.cmd`
+// shim and resolves it to either the real `.exe` it launches (e.g. claude) or to
+// `node <script.js>` for node-based shims (e.g. codex). `prependArgs` carries the
+// script path for the node case. If a shim exists but resolves to neither, we
+// REFUSE to spawn (throw) rather than fall back to a shell with untrusted argv.
+const execCache = new Map<string, { cmd: string; prependArgs: string[] }>();
 
-function resolveExecutable(command: string): { cmd: string; shell: boolean } {
+function resolveExecutable(command: string): { cmd: string; prependArgs: string[] } {
     // Commands with an explicit path or extension, and all non-Windows commands,
     // are spawned as-is.
-    if (process.platform !== 'win32') return { cmd: command, shell: false };
+    if (process.platform !== 'win32') return { cmd: command, prependArgs: [] };
     if (command.includes('/') || command.includes('\\') || path.extname(command)) {
-        return { cmd: command, shell: false };
+        return { cmd: command, prependArgs: [] };
     }
 
     const cached = execCache.get(command);
     if (cached) return cached;
 
     const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
-    let result: { cmd: string; shell: boolean } = { cmd: command, shell: false };
+    let resolved: { cmd: string; prependArgs: string[] } | null = null;
+    let shimPath: string | null = null;
 
-    outer:
     for (const dir of dirs) {
-        // Prefer a real .exe — spawns without a shell, arguments stay intact.
+        // Prefer a real .exe directly on PATH.
         const exe = path.join(dir, `${command}.exe`);
-        if (fs.existsSync(exe)) { result = { cmd: exe, shell: false }; break; }
+        if (fs.existsSync(exe)) { resolved = { cmd: exe, prependArgs: [] }; break; }
 
-        // Otherwise dereference an npm `.cmd` shim to the .exe it launches.
+        // Otherwise inspect the npm `.cmd` shim and dereference its launch target.
         const cmdShim = path.join(dir, `${command}.cmd`);
         if (fs.existsSync(cmdShim)) {
+            shimPath = cmdShim;
             try {
                 const text = fs.readFileSync(cmdShim, 'utf8');
+                const expand = (p: string) => p.replace(/%~?dp0%?\\?/gi, path.dirname(cmdShim) + path.sep);
+
+                // (a) a direct .exe the shim launches (skip the node.exe launcher).
                 for (const m of text.matchAll(/"([^"]+\.exe)"/gi)) {
-                    const target = m[1].replace(/%~?dp0%?\\?/gi, path.dirname(cmdShim) + path.sep);
-                    if (fs.existsSync(target)) { result = { cmd: target, shell: false }; break outer; }
+                    const target = expand(m[1]);
+                    if (/[\\/]node\.exe$/i.test(target)) continue;
+                    if (fs.existsSync(target)) { resolved = { cmd: target, prependArgs: [] }; break; }
                 }
-            } catch { /* fall through */ }
-            // Couldn't deref — use the shim via a shell as a last resort.
-            result = { cmd: cmdShim, shell: true };
+                // (b) a node-launched script: spawn the current node on the .js file.
+                if (!resolved) {
+                    const js = text.match(/"([^"]+\.js)"/i);
+                    if (js) {
+                        const script = expand(js[1]);
+                        if (fs.existsSync(script)) resolved = { cmd: process.execPath, prependArgs: [script] };
+                    }
+                }
+            } catch { /* unreadable shim — handled below */ }
             break;
         }
     }
 
-    execCache.set(command, result);
-    log('DEBUG', `Resolved executable '${command}' -> '${result.cmd}' (shell: ${result.shell})`);
-    return result;
+    if (!resolved) {
+        // A shim exists but we couldn't resolve a real binary: refuse to spawn via
+        // a shell with untrusted arguments. Otherwise the command simply isn't on
+        // PATH — let spawn surface a clear ENOENT.
+        if (shimPath) {
+            throw new Error(
+                `Cannot resolve '${command}' to a real executable (only a shim at ${shimPath}); ` +
+                `refusing to spawn it through a shell with untrusted arguments. Install a native binary for '${command}'.`
+            );
+        }
+        resolved = { cmd: command, prependArgs: [] };
+    }
+
+    execCache.set(command, resolved);
+    log('DEBUG', `Resolved executable '${command}' -> '${resolved.cmd}'${resolved.prependArgs.length ? ` ${resolved.prependArgs.join(' ')}` : ''}`);
+    return resolved;
 }
 
 // ── Active process tracking ─────────────────────────────────────────────────
@@ -82,11 +109,11 @@ export async function runCommand(command: string, args: string[], cwd?: string, 
         delete env.CLAUDECODE;
 
         const resolved = resolveExecutable(command);
-        const child = spawn(resolved.cmd, args, {
+        const child = spawn(resolved.cmd, [...resolved.prependArgs, ...args], {
             cwd: cwd || SCRIPT_DIR,
             stdio: ['ignore', 'pipe', 'pipe'],
             env,
-            shell: resolved.shell,
+            shell: false,
         });
 
         let stdout = '';
@@ -143,11 +170,11 @@ export function runCommandStreaming(
         delete env.CLAUDECODE;
 
         const resolved = resolveExecutable(command);
-        const child = spawn(resolved.cmd, args, {
+        const child = spawn(resolved.cmd, [...resolved.prependArgs, ...args], {
             cwd: cwd || SCRIPT_DIR,
             stdio: ['ignore', 'pipe', 'pipe'],
             env,
-            shell: resolved.shell,
+            shell: false,
         });
 
         // Track active process for manual session management
