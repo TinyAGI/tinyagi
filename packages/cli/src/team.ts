@@ -145,10 +145,11 @@ async function teamRemoveAgent(teamId: string, agentId: string) {
     }
 
     team.agents = remaining;
+    const previousLeader = team.leader_agent;
     team.leader_agent = newLeader;
     writeSettings(settings);
 
-    p.log.success(`Removed @${agentId} from team '${teamId}'.${newLeader !== team.leader_agent ? ` New leader: @${newLeader}.` : ''}`);
+    p.log.success(`Removed @${agentId} from team '${teamId}'.${newLeader !== previousLeader ? ` New leader: @${newLeader}.` : ''}`);
 }
 
 // --- team list ---
