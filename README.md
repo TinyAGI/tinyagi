@@ -652,6 +652,8 @@ Claude: "Don't forget to call mom!"
 
 Teams support sequential chains (single handoff) and parallel fan-out (multiple teammate mentions). See [docs/TEAMS.md](docs/TEAMS.md) for details.
 
+For a documentation lookup that passes source links between specialists, see the [public evidence handoff guide](docs/PUBLIC-RESEARCH.md).
+
 ### Cross-Device Access
 
 - WhatsApp on phone, Discord on desktop, Telegram anywhere, CLI for automation
